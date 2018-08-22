@@ -49,37 +49,39 @@ def create_parser():
     parser = argparse.ArgumentParser(prog='laziest',
                                      description="Generator of test_*.py "
                                                  "files for your src")
-
-    parser.add_argument('python_file', help='Target *.py file base '
+    subparsers = parser.add_subparsers()
+    test_subparser = subparsers.add_parser('tests')
+    test_subparser.add_argument('python_file', help='Target *.py file base '
                                             'for test generation', nargs=1,
                         action=check_path_action())
 
-    parser.add_argument('-o', '--objects',
+    test_subparser.add_argument('-o', '--objects',
                         help='List of objects names what must be tested '
                              '(functions, classes). Leave empty if you '
                              'want generate tests for all objects '
                              'in python_file', required=True,
                         nargs=1, action=check_path_action())
-    parser.add_argument('-s', '--save_to', help="Path where ti generate "
+    test_subparser.add_argument('-s', '--save_to', help="Path where ti generate "
                                         "test_*.py file.Usually "
                                         "in directory tests/",
                         default="tests/", required=False)
 
-    parser.add_argument('-v', '--version', help="show laziest version",
+    test_subparser.add_argument('-v', '--version', help="show laziest version",
                         action=show_version())
     return parser
 
 def main():
     parser = create_parser()
     args = parser.parse_args()
-    spec = imp_util.spec_from_file_location("test_object",
-                                            args.python_file)
-    target_module = imp_util.module_from_spec(spec)
-    spec.loader.exec_module(target_module)
-    obj = eval("target_module.{}".format(args.objects))
-    file_name = os.path.basename(args.python_file)
-    path = args.save_to
-    GeneratorTestsFiles(obj, file_name, path).generate_file()
+    if args.tests:
+        spec = imp_util.spec_from_file_location("test_object",
+                                                args.python_file)
+        target_module = imp_util.module_from_spec(spec)
+        spec.loader.exec_module(target_module)
+        obj = eval("target_module.{}".format(args.objects))
+        file_name = os.path.basename(args.python_file)
+        path = args.save_to
+        GeneratorTestsFiles(obj, file_name, path).generate_file()
 
 if __name__ == "__main__":
 	main()

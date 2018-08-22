@@ -1,7 +1,10 @@
 Laziest
 =======
+Laziest is a tool kit for laziest python developers:
 
-Unittests plot generator for Python
+ - generate python project layout with additional files - setup.cfg, setup.py,
+ tox.ini and etc
+ - generate unittests for Python code
 
 Tested with Python3.6
 
@@ -28,7 +31,7 @@ We have file class_for_test.py with class inside class::
 
 We start command::
 
-    laziest class_for_test.py -o ClassForTest
+    laziest tests class_for_test.py -o ClassForTest
 
 After command in directory "./tests" will be created file with name "test_class_for_test.py" with content::
 
