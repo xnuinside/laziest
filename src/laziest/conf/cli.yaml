@@ -1,0 +1,65 @@
+parser:
+  prog: 'laziest'
+  description: Generator of test_*.py files for your src
+
+commands:
+   - keys: ['-v', '--version']
+     help: "show laziest version"
+     action: show_version()
+
+subparsers:
+  tests:
+    - keys: ['python_file']
+      help: Target *.py file base for test generation
+      action: check_path_action()
+
+    - keys: [-o, --objects]
+      help: List of objects names for which must be generated tests and
+          included in unittests (functions, classes). Leave empty if you want
+          generate tests for all objects in python_file
+      action: check_path_action()
+      required: true
+
+    - keys: ['-s', '--save_to']
+      help: Path where ti generate test_*.py file.Usually in directory tests/
+      default: tests/
+
+  new:
+    - keys: ['package_name']
+      help: Package name to create. It will be name of main project directory
+            and name for all configs (setup.cfg, tox.ini and etc)'
+      action: check_path_action()
+
+    - keys: ['path']
+      help: "Path where will be created new package. If path tree does not exist,
+            it will be created. Default: current work directory"
+      action: check_path_action()
+      default: ""
+
+    - keys: ['-c', '--config']
+      help: Generate package from config.yaml resource. Need to provide path to
+            yaml. If config path provided and console params. Console params
+            had more priority on config settings
+
+    - keys: ['--project']
+      help: Name for Project and project directory, if not exist - used
+            package_name
+
+    - keys: ['-pd', '--package-dir']
+      help: Directory to store inside project dir
+
+    - keys: ['-r']
+      help: "Create requirements.txt files for different dependencies types: all
+            - generate all 3 files \n prod - generate only requirements.txt \n"
+      default: prod
+      choices: ["all", "prod", "dev", "test"]
+
+    - keys: ['--no-docs']
+      help: "Do not create docs directory and do not add sphinx as dev dependency"
+      default: False
+      action: store_true
+
+    - keys: ['--no-tox']
+      help: "To avoid creating tox.ini"
+      default: False
+      action: store_true

@@ -54,3 +54,11 @@ After command in directory "./tests" will be created file with name "test_class_
 
 What are the skeleton - plot for unittests
 
+
+Priority of defined params
+==========================
+1 - Higher, 3 - Lower
+
+1. Console args
+2. Config project
+3. Default configs: .pip.conf, .pydistutils.cfg, .laziest.ini

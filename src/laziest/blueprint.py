@@ -3,13 +3,15 @@ import os
 
 from laziest import defaults
 
+
 class PackageCreator(object):
 
     def __init__(self, name, path):
         self.package_name = name
         self.source_path = self._create_path(path)
 
-    def _create_path(self, path):
+    @staticmethod
+    def _create_path(path):
         if os.path.isfile(path):
             raise ValueError("path {} is a file cannot create package, "
                              "please provide correct path to directory ")
