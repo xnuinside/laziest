@@ -13,7 +13,7 @@ subparsers:
       help: Target *.py file base for test generation
       action: check_path_action()
 
-    - keys: [-o, --objects]
+    - keys: ['-o', '--objects']
       help: List of objects names for which must be generated tests and
           included in unittests (functions, classes). Leave empty if you want
           generate tests for all objects in python_file
@@ -25,34 +25,46 @@ subparsers:
       default: tests/
 
   new:
-    - keys: ['package_name']
-      help: Package name to create. It will be name of main project directory
-            and name for all configs (setup.cfg, tox.ini and etc)'
-      action: check_path_action()
-
     - keys: ['path']
       help: "Path where will be created new package. If path tree does not exist,
             it will be created. Default: current work directory"
       action: check_path_action()
       default: ""
 
-    - keys: ['-c', '--config']
-      help: Generate package from config.yaml resource. Need to provide path to
-            yaml. If config path provided and console params. Console params
-            had more priority on config settings
+    - keys: ['package_name']
+      help: Package name to create. It will be name of main project directory
+            and name for all configs (setup.cfg, tox.ini and etc)'
+      action: check_path_action()
 
-    - keys: ['--project']
+    - keys: ['-r', '--rewrite']
+      help: Provide key "--rewrite" to rewrite files inside target path if it's not empty.
+            Will be rewrited only files relative to packaging (setup.py,
+            setup.cfg and etc)
+      action: store_true
+      default: false
+
+    - keys: ['-c', '--config']
+      help: Not Implemented. Generate package from config.yaml resource.
+            Need to provide path to yaml. If config path provided and
+            console params. Console params had more priority on config settings
+
+    - keys: ['-pj', '--project']
       help: Name for Project and project directory, if not exist - used
             package_name
 
-    - keys: ['-pd', '--package-dir']
-      help: Directory to store inside project dir
+    - keys: ['-sd', '--source-dir']
+      help: Directory to store inside project dir. For example, project_dir/src/package_name, "src" - source dir
 
-    - keys: ['-r']
+    - keys: ['--no-git']
+      help: "If you don't want git init at the creation of project - provide this flag"
+      action: store_true
+
+    - keys: ['--req']
       help: "Create requirements.txt files for different dependencies types: all
-            - generate all 3 files \n prod - generate only requirements.txt \n"
+            - generate all 3 files \n prod - generate only requirements.txt \n.
+            You could pass a list. prod - default.
+            Use: 'prod, dev, test'"
       default: prod
-      choices: ["all", "prod", "dev", "test"]
 
     - keys: ['--no-docs']
       help: "Do not create docs directory and do not add sphinx as dev dependency"
@@ -62,4 +74,8 @@ subparsers:
     - keys: ['--no-tox']
       help: "To avoid creating tox.ini"
       default: False
+      action: store_true
+
+    - keys: ['--check-pypi']
+      help: "raise Error if project with same name exist on PyPi"
       action: store_true
