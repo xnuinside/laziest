@@ -1,23 +1,16 @@
 ## Laziest
 
-Laziest is a tool kit for Python Developers that provide such features:
-
-1. Creating Python Project layout (Blueprint) with files for correct packaging inside: setup.cfg, setup.py, tox.ini, requirements.txt, README.md, test dir, docs dir and etc.
-
-To use: 
-
-    laziest new target_folder package_name
- 
-2. Generating unittests blueprint for Python code
+Laziest is a tool that generate unittests blueprint for Python code using pytest
 
 To use:
 
-    laziest tests path_to_python_file -o class_name
-
+    laziest  path_to_python_file 
+    or
+    laziest . # to run tests in current dir
 
 ### Python versions Support:
 
-Tested with Python3.6
+Tested with Python3.7
 
 
 ###  Simple example for Unittests generation
@@ -69,25 +62,34 @@ What are the skeleton - plot for unittests
 For example: 
 
     laziest new ./target_dir project-name -r --no-tox --project new_project --source-dir src --no-docs --req lala,test
-    
-If you want to get full list of possible commands:
 
-    use:
-        laziest tests -h
-    or:  
-        laziest new -h
-        
-Or read file with all commands:
+All possible cli args described in:
 
     src/laziest/conf/cli.yaml
    
 
-Priority of defined params
-==========================
+### Priority of defined params
+
 1 - Higher, 3 - Lower
 
 1. Console args
-2. Config project
-3. Default configs: .pip.conf, .pydistutils.cfg, .laziest.ini
+2. Configs: laziest.cfg -> tox.ini -> setup.cfg -> default params from laziest/conf/default_conf.cfg
+3. Params typers can be found in laziest/conf/default_conf.cfg after ':' notation
+
+
+### Laziest Diagram: How it works
+
+https://drive.google.com/file/d/1x6wX-uyOi5A2ffoK6N5eXkUUu3fF3VWT/view?usp=sharing
+
+
+### TODO
+
+1. Normal documentation for methods 
+
+### Maintenance
+
+
+
+
 
 

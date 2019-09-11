@@ -1,3 +1,9 @@
 *.pyc
 **/__pycache__/
-src/laziest/__pycache__/
+laziest/__pycache__/
+laziest/conf/__pycache__/
+dist/
+build/
+.tox/
+laziest.egg-info/
+docs/build
