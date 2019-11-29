@@ -1,5 +1,4 @@
 import tabnanny
-import subprocess
 
 from ast import parse
 
@@ -8,10 +7,15 @@ from laziest.strings import test_method_prefix
 from laziest.generator import generate_test_file_content
 from laziest.conf.config import init_config, default_settings
 from laziest.walker import PathWalker, FilteredPaths
-
+import os
 
 tabnanny.verbose = True
 
+def dump_to_file(path, tf_content):
+    test_file_name = f'test_{os.path.basename(path)}'
+    test_file_path = os.path.join(os.path.dirname(path), test_file_name)
+    with open(test_file_path, 'w+') as test_file:
+        test_file.write(tf_content)
 
 def run_laziest(args):
     """ main method with call steps to run laziest """
@@ -28,7 +32,7 @@ def run_laziest(args):
         print(f'Run test generation for {python_file}')
         # run TestSetCreator to get list of expected test files
         append = False
-        if not config_args['overwrite']:
+        if not config_args.get('overwrite', False):
             append = True
             # run differ, to collect existed file names and methods
             pass
@@ -50,14 +54,15 @@ def run_laziest(args):
         # run comparator to get list of tests that we need to add (add only tests that not exist in test file)
 
         # run test file generator
-        tf_content = generate_test_file_content(an)
-
+        tf_content = generate_test_file_content(an, path)
+        print(tf_content)
         if append:
             # append new tests to tf
             # if new method in test case for class - insert
             pass
-        # save result to file
+        dump_to_file(path, tf_content)
 
-        # run autopep8 on test files
-        # subprocess.Popen(args="autopep8 "
-        # "--in-place --aggressive --aggressive .".split())
+# path  to your file to test
+path = ''
+arg = {'path': path}
+run_laziest(args=arg)

@@ -1,16 +1,16 @@
+import os
 from collections import defaultdict
-from typing import Dict, Text, List
-from copy import deepcopy
+from typing import Dict, Text
 
 import laziest.strings as s
 from laziest.analyzer import Analyzer
-from laziest.random_generators import str_generator
+from laziest import functions as f
 
 
 def generate_tests(tree: Dict) -> Text:
     """ main method return tests body/list for one python module """
     test_case = ""
-
+    imports = []
     # signature list need to check diff with existed tests
 
     for class_ in tree['classes']:
@@ -28,69 +28,41 @@ def generate_tests(tree: Dict) -> Text:
 
     for funct_name in tree['def']:
         # define test for sync function
-        test_case += function_test_creation(funct_name, tree['def'][funct_name])
+        test_case += f.test_creation(funct_name, tree['def'][funct_name])
+        imports.append(funct_name)
     for async_funct_name in tree['async']:
         # define test for async function
-        test_case += function_test_creation(async_funct_name, tree['async'][async_funct_name],
+        test_case += f.test_creation(async_funct_name, tree['async'][async_funct_name],
                                             async_type=True)
-    return test_case
+    pytest_needed = False
+    return pytest_needed, test_case, imports
 
 
-def function_test_creation(func_name: Text, func_data: Dict, async_type: bool = False) -> Text:
-    """ method to generate test body """
-    method_signature = s.method_signature if not async_type else s.async_method_signature
-    func_definition = method_signature.format(SP_4=s.SP_4, method=func_name)
-    if func_data['args']:
-        old_def = func_definition
-        func_definition = s.pytest_parametrize_decorator + old_def
-        # params structure (1-params values, last 'assert' - assert value)
-        null_param = {a: None for a in func_data['args']}
-        null_param['assert'] = None
-        params = generate_params_based_on_types(null_param, func_data['args'])
-        print(params)
-        func_definition = func_definition.replace("()", "(params)").replace("[]", str(params))
-        args = [a + ", " for a in func_data['args']]
-        func_definition += s.assert_string + f" {func_name}({''.join(args)[:-2]})"
-        if func_data['return'] is None:
-            # check method correct execution
-            func_definition += " == None"
-    func_definition += "\n\n\n"
-    return func_definition
+key_import = '$import$'
 
 
-def generate_params_based_on_types(null_param: Dict, args: Dict) -> List:
-    params = [null_param]
+def add_imports(path):
+    imports_header = f'import sys\n' \
+                     f'sys.path.append(\'{os.path.dirname(path)}\')\n' \
+                     f'from {os.path.basename(path).replace(".py", "")} import {key_import}\n'
 
-    print(args)
-    default_param = deepcopy(null_param)
-    for arg in args:
-        if 'default' in args[arg]:
-            default_param[arg] = args[arg]['default']
-        elif 'type' in args[arg] and not isinstance(args[arg]['type'], dict):
-            default_param[arg] = random_generators[map_types(args[arg]['type'])]
-    params.append(default_param)
-    return params
+    return imports_header
 
 
-def map_types(_type):
-    if _type == Text or _type == str :
-        return 'str'
-    else:
-        return 'need_to_define'
+def generate_test_file_content(an: Analyzer, path: Text) -> Text:
+    async_in = True if an.tree.get('async') else False
+    result = generate_tests(an.tree)
+    if result:
+        # need to add import of module that we test
+        file_output = combine_file(result, path, async_in)
+        return file_output
 
 
-random_generators = {'str': str_generator(),
-                     'need_to_define': 'need_to_define_generator'}
-
-
-def generate_test_file_content(an: Analyzer) -> Text:
-    async_in = True if 'async' in an.tree else False
-
-    file_output = "import pytest\n"
-
+def combine_file(result: tuple, path: Text,async_in: bool):
+    file_output = add_imports(path).replace(key_import, "".join(result[2]))
     if async_in:
         file_output = s.async_io_aware_text + file_output
-
     file_output += "\n\n"
-    file_output += generate_tests(an.tree)
-    # print(file_output)
+    file_output += result[1]
+    file_output.insert("import pytest\n") if result[0] else None
+    return file_output

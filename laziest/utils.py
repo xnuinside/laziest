@@ -1,3 +1,12 @@
 from logging import getLogger
+from typing import Text
 
 logger = getLogger(__name__)
+
+
+
+def map_types(_type):
+    if _type == Text or _type == str :
+        return 'str'
+    else:
+        return 'need_to_define'

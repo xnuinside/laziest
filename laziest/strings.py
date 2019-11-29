@@ -16,4 +16,5 @@ class_signature = "class Test{cls_name}:{SP_4}\n"
 
 assert_string = "assert"
 # infos
-async_io_aware_text = "# Need to install pytest-asyncio package to get possible run tests for async method\n\n"
+async_io_aware_text = "# Need to install pytest-asyncio package " \
+                      "to get possible run tests for async method\n\n"
