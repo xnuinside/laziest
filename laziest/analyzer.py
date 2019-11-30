@@ -5,6 +5,9 @@ from pprint import pprint
 from collections import defaultdict, OrderedDict
 
 
+pytest_needed = False
+
+
 class NotDefault(object):
     """special class to indicate args with no default values"""
     def __repr__(self):
@@ -17,13 +20,14 @@ no_default = NotDefault()
 class Analyzer(ast.NodeVisitor):
     """ class to parse files in dict structure to provide to generator data,
     that needed for tests generation """
-    def __init__(self):
+    def __init__(self, source):
         self.tree = {"import": [],
                      "from": [],
                      "def": {},
                      "raises": [],
                      "classes": [],
                      "async": {}}
+        self.source = source
 
     def visit_Import(self, node):
         for alias in node.names:
@@ -35,12 +39,82 @@ class Analyzer(ast.NodeVisitor):
             self.tree["from"].append(alias.name)
         self.generic_visit(node)
 
+
+    def get_bin_op_value(self, code_line, variables, variables_names, global_vars=None):
+        if not global_vars:
+            global_vars = {}
+        try:
+            return_value = eval(code_line, global_vars)
+        except NameError as name_er:
+            var_name = name_er.args[0].split('\'')[1]
+            print(var_name)
+            if var_name in variables_names:
+                variable = variables[variables_names[var_name]]
+                print(variable.__dict__)
+                print(variables_names)
+                print(variables)
+                # create global vars dict for eval value
+                if isinstance(variable.value, _ast.Dict):
+                    global_vars.update({var_name: {self.get_value(key):
+                                                       self.get_value(variable.value.values[num])
+                                                   for num, key in enumerate(variable.value.keys)}})
+                elif isinstance(variable.value, _ast.Name):
+                    # mean that our variable linked to another
+                    alias = variable.value.id
+                    print(alias)
+                    print('we are here')
+                    if alias not in global_vars and alias in variables_names:
+                        variable = variables[variables_names[var_name]]
+                        global_vars.update({alias: {key.s: variable.value.values[num].n for num, key in enumerate(
+                            variable.value.keys)}})
+                    elif alias not in global_vars:
+                        raise
+                    global_vars.update({var_name: global_vars.get(alias)})
+                return self.get_bin_op_value(code_line, variables, variables_names, global_vars)
+        except Exception as e:
+            global pytest_needed
+            pytest_needed = True
+            return_value = {'error': (e.__class__, e, )}
+        return return_value
+
+    def parse_bin_op(self, body_item, variables_names, variables):
+        lineno = body_item.value.lineno
+        code_line = self.source.split("\n")[lineno - 1].replace('return ', '')
+
+
+        return_value = self.get_bin_op_value(code_line, variables, variables_names)
+        return return_value
+
     def visit_FunctionDef(self, node):
-        self.tree['def'][node.name] = {
-                                  'args': self.get_function_args(node),
-                                  'kargs_def': node.args.kw_defaults,
-                                  'kargs': node.args.kwarg,
-                                  'return': node.returns}
+        print(node.name, node.__dict__)
+        print(node.returns)
+        print(node.body)
+        func = {'args': self.get_function_args(node),
+                'kargs_def': node.args.kw_defaults,
+                'kargs': node.args.kwarg,
+                'return': None}
+        print(node.body)
+        # local variables, assign statements in function body
+        variables = [node for node in node.body if isinstance(node, ast.Assign)]
+        variables_names = {}
+        print(variables)
+        if variables:
+            for index, var in enumerate(variables):
+                var_names =  {name_node.id: index for name_node in var.targets}
+                variables_names.update(var_names)
+        print(variables_names)
+        non_variables_body = [node for node in node.body if node not in variables]
+        for body_item in non_variables_body:
+            if isinstance(body_item, ast.Return):
+                print(type(body_item.value))
+                print(body_item.__dict__['value'].__dict__)
+                if isinstance(body_item.value, ast.Num):
+                    # numbers:
+                    return_value = body_item.value.n
+                elif isinstance(body_item.value, ast.BinOp):
+                    return_value = self.parse_bin_op(body_item, variables_names, variables)
+                func['return'] = return_value
+        self.tree['def'][node.name] = func
 
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)

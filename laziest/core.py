@@ -1,7 +1,7 @@
 import tabnanny
-
+import subprocess
 from ast import parse
-
+from typing import Text
 from laziest.analyzer import Analyzer
 from laziest.strings import test_method_prefix
 from laziest.generator import generate_test_file_content
@@ -11,11 +11,12 @@ import os
 
 tabnanny.verbose = True
 
-def dump_to_file(path, tf_content):
+def dump_to_file(path: Text, tf_content: Text) -> Text:
     test_file_name = f'test_{os.path.basename(path)}'
     test_file_path = os.path.join(os.path.dirname(path), test_file_name)
     with open(test_file_path, 'w+') as test_file:
         test_file.write(tf_content)
+    return test_file_path
 
 def run_laziest(args):
     """ main method with call steps to run laziest """
@@ -41,8 +42,9 @@ def run_laziest(args):
 
         # run analyzer
         with open(python_file, "r") as source:
-            tree = parse(source.read())
-        an = Analyzer()
+            source_massive = source.read()
+            tree = parse(source_massive)
+        an = Analyzer(source_massive)
         an.visit(tree)
         an.report()
 
@@ -60,9 +62,10 @@ def run_laziest(args):
             # append new tests to tf
             # if new method in test case for class - insert
             pass
-        dump_to_file(path, tf_content)
+        test_file_paht = dump_to_file(path, tf_content)
+        subprocess.Popen(f'black -l {79} {test_file_paht}', shell=True)
 
 # path  to your file to test
-path = ''
+path = '/Users/xnu/laziest/tests/unittests/primitive_code.py'
 arg = {'path': path}
 run_laziest(args=arg)

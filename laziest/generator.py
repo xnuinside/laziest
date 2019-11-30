@@ -5,6 +5,8 @@ from typing import Dict, Text
 import laziest.strings as s
 from laziest.analyzer import Analyzer
 from laziest import functions as f
+import laziest.analyzer as a
+
 
 
 def generate_tests(tree: Dict) -> Text:
@@ -34,8 +36,8 @@ def generate_tests(tree: Dict) -> Text:
         # define test for async function
         test_case += f.test_creation(async_funct_name, tree['async'][async_funct_name],
                                             async_type=True)
-    pytest_needed = False
-    return pytest_needed, test_case, imports
+
+    return a.pytest_needed, test_case, imports
 
 
 key_import = '$import$'
@@ -58,11 +60,18 @@ def generate_test_file_content(an: Analyzer, path: Text) -> Text:
         return file_output
 
 
-def combine_file(result: tuple, path: Text,async_in: bool):
-    file_output = add_imports(path).replace(key_import, "".join(result[2]))
+def combine_file(result: tuple, path: Text, async_in: bool) -> Text:
+    """
+        combine file body
+    :param result: result of main generator function
+    :param path: path to file, that we test
+    :param async_in: exist async in or not, shall we import sync pytest or not
+    :return:
+    """
+    file_output = add_imports(path).replace(key_import, ", ".join(result[2]))
     if async_in:
         file_output = s.async_io_aware_text + file_output
     file_output += "\n\n"
     file_output += result[1]
-    file_output.insert("import pytest\n") if result[0] else None
+    file_output = "import pytest\n" + file_output if result[0] else None
     return file_output

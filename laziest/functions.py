@@ -28,6 +28,16 @@ def test_creation(func_name: Text, func_data: Dict, async_type: bool = False) ->
             # check method correct execution
             func_definition += " == None"
     else:
-            func_definition += s.assert_string + f" {func_name}() == None"
+        if isinstance(func_data['return'], dict) and 'error' in func_data['return']:
+            # if we have exception
+            print(str(func_data['return']['error'][0]))
+            exc_name = str(func_data['return']['error'][0]).split('\'')[1]
+            comment = f'{s.SP_4}{s.SP_4}# ' + str(func_data['return']['error'][1])
+            func_definition += f" with pytest.raises({exc_name}): \n{comment} \n" \
+                 f"{s.SP_4}{s.SP_4}{func_name}()"
+        else:
+            func_definition += s.assert_string + f' {func_name}() =='
+            func_definition += f" \'{func_data['return']}\'" \
+                if isinstance(func_data['return'], str) else f" {func_data['return']}"
     func_definition += "\n\n\n"
     return func_definition
