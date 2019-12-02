@@ -67,6 +67,6 @@ def run_laziest(args):
         subprocess.Popen(f'black -l {79} {test_file_paht}', shell=True)
 
 # path  to your file to test
-path = '/Users/jvolkova/laziest/tests/unittests/primitive_code.py'
+path = ''
 arg = {'path': path}
 run_laziest(args=arg)
