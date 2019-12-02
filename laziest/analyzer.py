@@ -1,9 +1,10 @@
 import ast
 import _ast
+import re
 from typing import Any, Union
 from pprint import pprint
 from collections import defaultdict, OrderedDict
-
+from laziest import ast_meta as meta
 
 pytest_needed = False
 
@@ -27,7 +28,8 @@ class Analyzer(ast.NodeVisitor):
                      "raises": [],
                      "classes": [],
                      "async": {}}
-        self.source = source
+        # list of source lines
+        self.source = source.split("\n")
 
     def visit_Import(self, node):
         for alias in node.names:
@@ -38,7 +40,6 @@ class Analyzer(ast.NodeVisitor):
         for alias in node.names:
             self.tree["from"].append(alias.name)
         self.generic_visit(node)
-
 
     def get_bin_op_value(self, code_line, variables, variables_names, global_vars=None):
         if not global_vars:
@@ -77,11 +78,15 @@ class Analyzer(ast.NodeVisitor):
             return_value = {'error': (e.__class__, e, )}
         return return_value
 
-    def parse_bin_op(self, body_item, variables_names, variables):
-        lineno = body_item.value.lineno
-        code_line = self.source.split("\n")[lineno - 1].replace('return ', '')
+    def parse_bin_op(self, node, variables_names, variables):
+        lineno = node.lineno
+        code_line = self.source[lineno - 1]
 
-
+        if '=' in code_line:
+            code_line = code_line.split("=")[1]
+        if 'return' in code_line:
+            code_line = code_line.replace('return ', '')
+        code_line = re.sub(r'^\s+|\s+$', '', code_line)
         return_value = self.get_bin_op_value(code_line, variables, variables_names)
         return return_value
 
@@ -106,39 +111,58 @@ class Analyzer(ast.NodeVisitor):
         non_variables_body = [node for node in node.body if node not in variables]
         for body_item in non_variables_body:
             if isinstance(body_item, ast.Return):
-                print(type(body_item.value))
-                print(body_item.__dict__['value'].__dict__)
-                if isinstance(body_item.value, ast.Num):
-                    # numbers:
-                    return_value = body_item.value.n
-                elif isinstance(body_item.value, ast.BinOp):
-                    return_value = self.parse_bin_op(body_item, variables_names, variables)
-                func['return'] = return_value
+                print("we are here")
+                func['return'] = self.get_value(body_item.value, variables_names, variables)
+
         self.tree['def'][node.name] = func
 
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)
 
-    def get_value(self, var: Any) -> None:
-        if isinstance(var, _ast.Str):
-            return var.s
-        elif isinstance(var, _ast.Num):
-            return var.n
-        elif 'func' in var.__dict__ and var.func.id == 'dict':
-            return eval("{}({})".format(var.func.id, "".join([str("{}={},".format(
-                x.arg, self.get_value(x.value))) for x in var.keywords])))
-        elif 'func' in var.__dict__:
-            print(var.func.__dict__)
+    def get_value(self, node: Any, variables_names=None, variables=None):
+        node_type = node.__class__
+        print(node_type)
+        print(node.__dict__)
+        if node_type in meta.simple:
+            print(node_type)
+            print('we are here1')
+            print(node.__dict__[meta.values_for_ast_type[node_type]])
+            return node.__dict__[meta.values_for_ast_type[node_type]]
+        elif node_type in meta.iterated:
+            return meta.iterated[node_type]([self.get_value(x, variables_names, variables)
+                                             for x in node.__dict__[meta.values_for_ast_type[node_type]]])
+        elif isinstance(node, _ast.Name):
+            alias = node.id
+            print(alias)
+            print('we are here')
+            if alias in variables_names:
+                variable = variables[variables_names[alias]]
+                return self.get_value(variable, variables_names, variables)
+            return node.id
+        elif isinstance(node, _ast.Assign):
+            return self.get_value(node.value, variables_names, variables)
+        elif isinstance(node, _ast.Dict):
+            return {self.get_value(key, variables_names, variables):
+                        self.get_value(node.values[num], variables_names, variables)
+                    for num, key in enumerate(node.keys)}
+        elif isinstance(node, ast.BinOp):
+            return self.parse_bin_op(node, variables_names, variables)
+        elif 'func' in node.__dict__ and node.func.id == 'dict':
+            return eval("{}({})".format(node.func.id, "".join([str("{}={},".format(
+                x.arg, self.get_value(x.value, variables_names, variables))) for x in node.keywords])))
+        elif 'func' in node.__dict__:
+            print(node.func.__dict__)
             try:
-                result = eval("{}({})".format(var.func.id,
-                                            [str(self.get_value(x)) for x in var.args]))
+                result = eval("{}({})".format(node.func.id,
+                                              [str(self.get_value(x)) for x in node.args]))
             except NameError as e:
                 print('NameError', e.args)
                 result = None
             return result
         else:
-            print("new type", var.__dict__)
-            return None
+
+            print("new type", node, node.__dict__)
+            raise
 
     def get_function_args(self, body_item: _ast.Name):
         args = OrderedDict()

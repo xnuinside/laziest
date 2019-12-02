@@ -18,6 +18,7 @@ def dump_to_file(path: Text, tf_content: Text) -> Text:
         test_file.write(tf_content)
     return test_file_path
 
+
 def run_laziest(args):
     """ main method with call steps to run laziest """
     print(args)
@@ -66,6 +67,6 @@ def run_laziest(args):
         subprocess.Popen(f'black -l {79} {test_file_paht}', shell=True)
 
 # path  to your file to test
-path = '/Users/xnu/laziest/tests/unittests/primitive_code.py'
+path = '/Users/jvolkova/laziest/tests/unittests/primitive_code.py'
 arg = {'path': path}
 run_laziest(args=arg)
