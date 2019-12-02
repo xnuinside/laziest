@@ -1,0 +1,42 @@
+parser:
+  prog: 'laziest'
+  description: Generator of test_*.py files for your Python code
+
+commands:
+    - keys: ['path']
+      help: Target *.py or package folder for test generation
+      action: check_path_action()
+
+    - keys: ['-v', '--version']
+      help: "show laziest version"
+      action: show_version()
+
+    - keys: ['-r', '--recursive']
+      help: "Parse folder recursive to get list of '.py' files for test generation"
+      default: True
+
+    - keys: ['-tp', '--test_path']
+      help: "Path where to generate test_*.py files. Usually in directory tests/"
+      default: tests/
+
+    - keys: ['-id', '--ignore_dir_names']
+      help: "Provide list of directories names, what should be ignored: 'example/','data/'"
+
+      # TODO: need to change to ignore by pattern
+    - keys: ['-if', '--ignore_file_names']
+      help: "Provide list of files names, what should be ignored: 'example.py', 'hql.py'"
+
+    - keys: ['-c', '--config']
+      help: "Possible to provide config by path. Not implemented yet \n
+          Example: -c custom_path/to/laziest.cfg "
+
+    - keys: ['-I', '--use_ignore_files']
+      help: "Provide paths of ignore_files that contains list of files and folder
+        ignore to (.gitignore, .dockerignore and etc). \n
+          Example: -I .gitignore,folder/.dockerignore"
+
+    - keys: ['-o', '--overwrite']
+      help: "Overwrite test files if exists"
+      default: False
+
+
