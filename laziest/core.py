@@ -11,6 +11,7 @@ import os
 
 tabnanny.verbose = True
 
+
 def dump_to_file(path: Text, tf_content: Text) -> Text:
     test_file_name = f'test_{os.path.basename(path)}'
     test_file_path = os.path.join(os.path.dirname(path), test_file_name)

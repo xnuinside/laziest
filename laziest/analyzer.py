@@ -21,6 +21,9 @@ no_default = NotDefault()
 class Analyzer(ast.NodeVisitor):
     """ class to parse files in dict structure to provide to generator data,
     that needed for tests generation """
+
+    current_state = None
+
     def __init__(self, source):
         self.tree = {"import": [],
                      "from": [],
@@ -30,6 +33,7 @@ class Analyzer(ast.NodeVisitor):
                      "async": {}}
         # list of source lines
         self.source = source.split("\n")
+        Analyzer.current_state = self
 
     def visit_Import(self, node):
         for alias in node.names:
@@ -46,9 +50,13 @@ class Analyzer(ast.NodeVisitor):
             global_vars = {}
         try:
             return_value = eval(code_line, global_vars)
+            print(code_line)
+            raise
         except NameError as name_er:
             var_name = name_er.args[0].split('\'')[1]
             print(var_name)
+            if name_er in self.func_data['args']:
+                return_value = {'BinOp': code_line}
             if var_name in variables_names:
                 variable = variables[variables_names[var_name]]
                 print(variable.__dict__)
@@ -63,7 +71,7 @@ class Analyzer(ast.NodeVisitor):
                     # mean that our variable linked to another
                     alias = variable.value.id
                     print(alias)
-                    print('we are here')
+                    print('we are here3')
                     if alias not in global_vars and alias in variables_names:
                         variable = variables[variables_names[var_name]]
                         global_vars.update({alias: {key.s: variable.value.values[num].n for num, key in enumerate(
@@ -87,17 +95,20 @@ class Analyzer(ast.NodeVisitor):
         if 'return' in code_line:
             code_line = code_line.replace('return ', '')
         code_line = re.sub(r'^\s+|\s+$', '', code_line)
-        return_value = self.get_bin_op_value(code_line, variables, variables_names)
+        try:
+            return_value = self.get_bin_op_value(code_line, variables, variables_names)
+        except UnboundLocalError:
+            return_value = {'BinOp': code_line}
         return return_value
 
     def visit_FunctionDef(self, node):
         print(node.name, node.__dict__)
         print(node.returns)
         print(node.body)
-        func = {'args': self.get_function_args(node),
-                'kargs_def': node.args.kw_defaults,
-                'kargs': node.args.kwarg,
-                'return': None}
+        self.func_data = {'args': self.get_function_args(node),
+                     'kargs_def': node.args.kw_defaults,
+                     'kargs': node.args.kwarg,
+                     'return': None}
         print(node.body)
         # local variables, assign statements in function body
         variables = [node for node in node.body if isinstance(node, ast.Assign)]
@@ -105,16 +116,16 @@ class Analyzer(ast.NodeVisitor):
         print(variables)
         if variables:
             for index, var in enumerate(variables):
-                var_names =  {name_node.id: index for name_node in var.targets}
+                var_names = {name_node.id: index for name_node in var.targets}
                 variables_names.update(var_names)
         print(variables_names)
         non_variables_body = [node for node in node.body if node not in variables]
         for body_item in non_variables_body:
             if isinstance(body_item, ast.Return):
-                print("we are here")
-                func['return'] = self.get_value(body_item.value, variables_names, variables)
+                print("we are here2")
+                self.func_data['return'] = self.get_value(body_item.value, variables_names, variables)
 
-        self.tree['def'][node.name] = func
+        self.tree['def'][node.name] = self.func_data
 
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)
@@ -138,6 +149,11 @@ class Analyzer(ast.NodeVisitor):
             if alias in variables_names:
                 variable = variables[variables_names[alias]]
                 return self.get_value(variable, variables_names, variables)
+            elif alias in self.func_data['args']:
+                    print("argument found")
+                    return {'arg': node.id}
+            else:
+                raise Exception(node.id)
             return node.id
         elif isinstance(node, _ast.Assign):
             return self.get_value(node.value, variables_names, variables)

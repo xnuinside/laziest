@@ -8,8 +8,7 @@ from laziest import functions as f
 import laziest.analyzer as a
 
 
-
-def generate_tests(tree: Dict) -> Text:
+def generate_tests(tree: Dict):
     """ main method return tests body/list for one python module """
     test_case = ""
     imports = []
@@ -27,16 +26,15 @@ def generate_tests(tree: Dict) -> Text:
         for method in class_['async']:
             if method != '__init__':
                 test_case += s.class_async_method_signature.format(SP_4=s.SP_4, method=method)
-
     for funct_name in tree['def']:
         # define test for sync function
         test_case += f.test_creation(funct_name, tree['def'][funct_name])
         imports.append(funct_name)
     for async_funct_name in tree['async']:
         # define test for async function
-        test_case += f.test_creation(async_funct_name, tree['async'][async_funct_name],
-                                            async_type=True)
-
+        test_case += f.test_creation(async_funct_name,
+                                     tree['async'][async_funct_name],
+                                     async_type=True)
     return a.pytest_needed, test_case, imports
 
 
@@ -73,5 +71,5 @@ def combine_file(result: tuple, path: Text, async_in: bool) -> Text:
         file_output = s.async_io_aware_text + file_output
     file_output += "\n\n"
     file_output += result[1]
-    file_output = "import pytest\n" + file_output if result[0] else None
+    file_output = "import pytest\n" + file_output if result[0] else file_output
     return file_output
