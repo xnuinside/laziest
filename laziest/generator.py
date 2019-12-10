@@ -28,6 +28,7 @@ def generate_tests(tree: Dict):
                 test_case += s.class_async_method_signature.format(SP_4=s.SP_4, method=method)
     for funct_name in tree['def']:
         # define test for sync function
+        print(funct_name)
         test_case += f.test_creation(funct_name, tree['def'][funct_name])
         imports.append(funct_name)
     for async_funct_name in tree['async']:
@@ -71,5 +72,5 @@ def combine_file(result: tuple, path: Text, async_in: bool) -> Text:
         file_output = s.async_io_aware_text + file_output
     file_output += "\n\n"
     file_output += result[1]
-    file_output = "import pytest\n" + file_output if result[0] else file_output
+    file_output = "import pytest\n" + file_output #if result[0] else file_output
     return file_output

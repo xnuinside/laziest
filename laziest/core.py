@@ -20,15 +20,12 @@ def dump_to_file(path: Text, tf_content: Text) -> Text:
     return test_file_path
 
 
-def run_laziest(args):
+def run_laziest(args: dict):
     """ main method with call steps to run laziest """
-    print(args)
     config_args = {arg: args[arg] for arg in args if arg in default_settings and args[arg] is not None}
     # init config
     cfg = init_config(config_args)
-    print(config_args)
     path = args['path']
-    print(cfg.recursive)
     fp = FilteredPaths(cfg.use_ignore_files)
     pw = PathWalker(path, fp, cfg.recursive)
     for python_file in pw.python_files:
@@ -64,8 +61,8 @@ def run_laziest(args):
             # append new tests to tf
             # if new method in test case for class - insert
             pass
-        test_file_paht = dump_to_file(path, tf_content)
-        subprocess.Popen(f'black -l {79} {test_file_paht}', shell=True)
+        test_file_path = dump_to_file(path, tf_content)
+        subprocess.Popen(f'black -l {79} {test_file_path}', shell=True)
 
 # path  to your file to test
 path = ''
