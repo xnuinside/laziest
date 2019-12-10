@@ -19,5 +19,7 @@ def generate_params_based_on_types(null_param: Dict, args: Dict):
         elif 'type' in args[arg] and not isinstance(args[arg]['type'], dict):
             default_param[arg] = generators[map_types(args[arg]['type'])]
         else:
-            default_param[arg] = randint(0,7)
+            default_param[arg] = randint(0, 7)
+    print('hello')
+    print(default_param)
     return default_param

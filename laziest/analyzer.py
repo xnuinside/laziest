@@ -33,6 +33,7 @@ class Analyzer(ast.NodeVisitor):
                      "async": {}}
         # list of source lines
         self.source = source.split("\n")
+        self.func_data = {}
         Analyzer.current_state = self
 
     def visit_Import(self, node):
@@ -46,23 +47,34 @@ class Analyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def get_bin_op_value(self, code_line, variables, variables_names, global_vars=None):
+        print('parse_bin_op')
+        print(variables_names, variables)
         if not global_vars:
             global_vars = {}
+            if variables_names and variables:
+                for name in variables_names:
+                    global_vars = {name: variables[variables_names[name]]}
+
         try:
             return_value = eval(code_line, global_vars)
             print(code_line)
-            raise
+            print(global_vars)
         except NameError as name_er:
+            print(name_er)
             var_name = name_er.args[0].split('\'')[1]
+            print('var_name')
             print(var_name)
             if name_er in self.func_data['args']:
-                return_value = {'BinOp': code_line}
-            if var_name in variables_names:
+                return_value = {'BinOp': code_line, 'global_vars': global_vars}
+            elif var_name in variables_names:
+                print('variables_names')
                 variable = variables[variables_names[var_name]]
                 print(variable.__dict__)
                 print(variables_names)
                 print(variables)
                 # create global vars dict for eval value
+                print('variable.value')
+                print(variable.value)
                 if isinstance(variable.value, _ast.Dict):
                     global_vars.update({var_name: {self.get_value(key):
                                                        self.get_value(variable.value.values[num])
@@ -74,31 +86,49 @@ class Analyzer(ast.NodeVisitor):
                     print('we are here3')
                     if alias not in global_vars and alias in variables_names:
                         variable = variables[variables_names[var_name]]
-                        global_vars.update({alias: {key.s: variable.value.values[num].n for num, key in enumerate(
-                            variable.value.keys)}})
-                    elif alias not in global_vars:
-                        raise
-                    global_vars.update({var_name: global_vars.get(alias)})
+                        global_vars.update(
+                            {alias: {self.get_value(key, variables_names, variables):
+                                         self.get_value(variable.value.values[num])
+                                     for num, key in enumerate(variable.value.keys)}})
+                    else:
+                        global_vars.update({var_name: global_vars.get(alias)})
+                else:
+                    global_vars.update({var_name: self.get_value(variable.value)})
                 return self.get_bin_op_value(code_line, variables, variables_names, global_vars)
         except Exception as e:
             global pytest_needed
             pytest_needed = True
             return_value = {'error': (e.__class__, e, )}
+        print(variables_names, variables)
         return return_value
 
     def parse_bin_op(self, node, variables_names, variables):
         lineno = node.lineno
         code_line = self.source[lineno - 1]
-
+        col_offset = node.left.col_offset
         if '=' in code_line:
-            code_line = code_line.split("=")[1]
+            left_part, code_line = code_line.split("=")[0], code_line.split("=")[1]
+            col_offset -= len(left_part)
+            col_offset -= 1
         if 'return' in code_line:
             code_line = code_line.replace('return ', '')
+            col_offset -= 7
+        print('col_offset', col_offset)
+        if ',' in code_line:
+            print(code_line)
+            print(code_line[col_offset:])
+            code_line = code_line[col_offset:].split(',')[0]
         code_line = re.sub(r'^\s+|\s+$', '', code_line)
+        print('code_line123')
+        print(code_line)
         try:
-            return_value = self.get_bin_op_value(code_line, variables, variables_names)
+            global_vars = {}
+            if variables_names and variables:
+                for name in variables_names:
+                    global_vars = {name: self.get_value(variables[variables_names[name]])}
+            return_value = self.get_bin_op_value(code_line, variables, variables_names, global_vars)
         except UnboundLocalError:
-            return_value = {'BinOp': code_line}
+            return_value = {'BinOp': code_line, 'global_vars': global_vars}
         return return_value
 
     def visit_FunctionDef(self, node):
@@ -106,25 +136,30 @@ class Analyzer(ast.NodeVisitor):
         print(node.returns)
         print(node.body)
         self.func_data = {'args': self.get_function_args(node),
-                     'kargs_def': node.args.kw_defaults,
-                     'kargs': node.args.kwarg,
-                     'return': None}
+                          'kargs_def': node.args.kw_defaults,
+                          'kargs': node.args.kwarg,
+                          'return': None}
         print(node.body)
         # local variables, assign statements in function body
         variables = [node for node in node.body if isinstance(node, ast.Assign)]
         variables_names = {}
+        print('variables_s')
+
         print(variables)
         if variables:
             for index, var in enumerate(variables):
                 var_names = {name_node.id: index for name_node in var.targets}
                 variables_names.update(var_names)
         print(variables_names)
+        from copy import deepcopy
+        self.variables = variables
+        self.variables_names = deepcopy(variables_names)
         non_variables_body = [node for node in node.body if node not in variables]
         for body_item in non_variables_body:
             if isinstance(body_item, ast.Return):
                 print("we are here2")
                 self.func_data['return'] = self.get_value(body_item.value, variables_names, variables)
-
+                print(self.func_data['return'])
         self.tree['def'][node.name] = self.func_data
 
     def visit_Raise(self, node: ast.Name) -> None:
@@ -132,29 +167,40 @@ class Analyzer(ast.NodeVisitor):
 
     def get_value(self, node: Any, variables_names=None, variables=None):
         node_type = node.__class__
+        if not variables:
+            variables = self.variables or []
+        if not variables_names:
+            variables_names = self.variables_names or {}
+        print('valueee')
         print(node_type)
         print(node.__dict__)
+        print(variables_names)
         if node_type in meta.simple:
             print(node_type)
             print('we are here1')
             print(node.__dict__[meta.values_for_ast_type[node_type]])
             return node.__dict__[meta.values_for_ast_type[node_type]]
         elif node_type in meta.iterated:
-            return meta.iterated[node_type]([self.get_value(x, variables_names, variables)
+            print('iterating')
+            result = meta.iterated[node_type]([self.get_value(x, variables_names, variables)
                                              for x in node.__dict__[meta.values_for_ast_type[node_type]]])
+            print(result)
+            return result
         elif isinstance(node, _ast.Name):
             alias = node.id
-            print(alias)
+            print(node.__dict__)
+            print(node.ctx)
             print('we are here')
             if alias in variables_names:
                 variable = variables[variables_names[alias]]
+
                 return self.get_value(variable, variables_names, variables)
             elif alias in self.func_data['args']:
                     print("argument found")
                     return {'arg': node.id}
             else:
+                print(node)
                 raise Exception(node.id)
-            return node.id
         elif isinstance(node, _ast.Assign):
             return self.get_value(node.value, variables_names, variables)
         elif isinstance(node, _ast.Dict):
@@ -170,7 +216,7 @@ class Analyzer(ast.NodeVisitor):
             print(node.func.__dict__)
             try:
                 result = eval("{}({})".format(node.func.id,
-                                              [str(self.get_value(x)) for x in node.args]))
+                                              [str(self.get_value(x, variables_names, variables)) for x in node.args]))
             except NameError as e:
                 print('NameError', e.args)
                 result = None
