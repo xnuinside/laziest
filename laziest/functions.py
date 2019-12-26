@@ -8,7 +8,9 @@ from laziest import analyzer
 normal_types = [int, str, list, dict, tuple, set, bytearray, bytes]
 
 
-def get_method_signature(func_name: Text, async_type: bool) -> Text:
+def get_method_signature(func_name: Text, async_type: bool, class_name=None) -> Text:
+    if class_name:
+        func_name = f'{convert(class_name)}_{func_name}'
     method_signature = s.method_signature if not async_type else s.async_method_signature
     # create test method signature
     func_definition = method_signature.format(SP_4=s.SP_4, method=func_name)
@@ -65,24 +67,75 @@ def get_assert_for_params(func_data, params):
     print(func_data)
     return return_value
 
+import re
 
-def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict) -> Text:
+
+def convert(name):
+    """ from camel case / pascal case to snake_case
+    :param name:
+    :return:
+    """
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
+def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
+                       class_=None, class_method_type=None) -> Text:
+    print(func_data)
+    instance_ = None
+
+    reserved_name = ['self', 'cls']
+    if class_:
+        snake_case_var = convert(class_["name"])
+        if not class_method_type:
+            raise
+        elif class_method_type not in ['static', 'class', 'self']:
+            raise
+        if class_method_type == 'static' or class_method_type == 'class':
+            func_name = f'{class_["name"]}.{func_name}'
+        else:
+            if '__init__' in class_['def'].get('self'):
+                init_args = class_['def']['self']['__init__']['args']
+                print('init 1')
+                print(init_args)
+                null_param = {a: None for a in class_['def']['self']['__init__']['args']
+                              if a not in reserved_name}
+                filtered_args = {x: init_args[x] for x in init_args
+                                 if x not in reserved_name}
+                print(filtered_args)
+                params = generate_params_based_on_types(null_param, filtered_args)
+                params_line = ', '.join([f'{key}={value}' for key, value in params.items()])
+                instance_ = f'{snake_case_var}  = {class_["name"]}({params_line})'
+            func_name = f'{snake_case_var}.{func_name}'
     print(func_data)
     if func_data['args']:
         # func_definition = s.pytest_parametrize_decorator + func_definition
         # params structure (1-params values, last 'assert' - assert value)
         null_param = {a: None for a in func_data['args']}
+        if class_method_type != 'static':
+            func_data['args'] = {x: func_data['args'][x] for x in deepcopy(null_param)
+                                 if x not in reserved_name}
+            null_param = {x: null_param[x]
+                          for x in null_param if x not in reserved_name}
         params = generate_params_based_on_types(null_param, func_data['args'])
         params_assert = get_assert_for_params(func_data, params)
         func_data['return'] = params_assert
-    function_header = s.assert_string
+    if not instance_:
+        function_header = s.assert_string
+    else:
+        function_header = instance_ + "\n" + s.SP_4 + s.assert_string
     if not func_data['args']:
-        # def function_name()
         function_header += f' {func_name}()'
     else:
         print(params)
-        params_line = ', '.join([f'{key} = {value}' for key, value in params.items()])
-        function_header += f' {func_name}({params_line})'
+        functions_headers = []
+        for param in params:
+            params_line = ', '.join([f'{key} = {value}' if not isinstance(
+                value, str) else f'{key} = \"{value}\"' for key, value in param.items()])
+            function_header_per_args = function_header + f' {func_name}({params_line})'
+            functions_headers.append(function_header_per_args)
+
+    eq_line = " is " if func_data['return'] is None else f" == "
     if isinstance(func_data['return'], dict):
         if 'error' in func_data['return']:
             # if we have exception
@@ -93,16 +146,21 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict) 
                                f"{s.SP_4}{s.SP_4}{func_name}()"
     elif func_data['args']:
         print('me here')
-        func_definition += function_header + f" == {params_assert}"
+        for function in functions_headers:
+            func_definition += function + f"{eq_line}{params_assert}" + f"\n{s.SP_4}"
     else:
-        func_definition += function_header + f" == " + (f"\'{func_data['return']}\'" if isinstance(
+        func_definition += function_header + eq_line + (f"\'{func_data['return']}\'" if isinstance(
             func_data['return'], str) else f"{func_data['return']}")
     return func_definition
 
 
-def test_creation(func_name: Text, func_data: Dict, async_type: bool = False) -> Text:
+def test_creation(func_name: Text, func_data: Dict, async_type: bool = False,
+                  class_=None, class_method_type=None) -> Text:
     """ method to generate test body """
-    func_definition = get_method_signature(func_name, async_type)
-    func_definition = test_body_resolver(func_definition, func_name, func_data)
+    if class_:
+        func_definition = get_method_signature(func_name, async_type, class_['name'])
+    else:
+        func_definition = get_method_signature(func_name, async_type)
+    func_definition = test_body_resolver(func_definition, func_name, func_data, class_, class_method_type)
     func_definition += "\n\n\n"
     return func_definition

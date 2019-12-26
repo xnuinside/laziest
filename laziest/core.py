@@ -1,3 +1,4 @@
+import sys
 import tabnanny
 import subprocess
 from ast import parse
@@ -26,9 +27,14 @@ def run_laziest(args: dict):
     # init config
     cfg = init_config(config_args)
     path = args['path']
+    print('path')
+    print(path)
+    if not os.path.exists(path):
+        raise Exception(f'Path {path} not exists')
     fp = FilteredPaths(cfg.use_ignore_files)
     pw = PathWalker(path, fp, cfg.recursive)
-    for python_file in pw.python_files:
+    paths = [x for x in pw.python_files if '__init__' not in x]
+    for python_file in paths:
         print(f'Run test generation for {python_file}')
         # run TestSetCreator to get list of expected test files
         append = False
@@ -62,9 +68,18 @@ def run_laziest(args: dict):
             # if new method in test case for class - insert
             pass
         test_file_path = dump_to_file(path, tf_content)
-        subprocess.Popen(f'black -l {79} {test_file_path}', shell=True)
+        proc = subprocess.Popen(f'black -l {79} {test_file_path}', shell=True)
+        proc.wait()
+        proc.kill()
+    exit(0)
 
-# path  to your file to test
-path = ''
-arg = {'path': path}
-run_laziest(args=arg)
+if __name__ == '__main__':
+    args = sys.argv
+    print(sys.argv)
+    # path  to your file to test
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
+    else:
+        path = '/Users/jvolkova/laziest/tests/functional/conditions.py'
+    arg = {'path': path}
+    run_laziest(args=arg)

@@ -40,6 +40,7 @@ class PathWalker(object):
     def __init__(self, path: str,
                  fp: FilteredPaths,
                  recursive: bool =False) -> None:
+        # TODO: add ignore files, subdirs
         self.path = os.path.abspath(path)
         self.fp = fp
         print(recursive)

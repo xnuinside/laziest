@@ -13,19 +13,21 @@ def generate_tests(tree: Dict):
     test_case = ""
     imports = []
     # signature list need to check diff with existed tests
-
+    # method types : class, self, static
     for class_ in tree['classes']:
         # define test for non-empty classes function
-        if not class_['def'] or isinstance(class_['def'], defaultdict) and not class_['args']:
+        if not class_['def']:
             print("Empty class")
             continue
-        test_case = s.class_signature.format(SP_4=s.SP_4, cls_name=class_['name'])
-        for method in class_['def']:
-            if method != '__init__':
-                test_case += s.class_method_signature.format(SP_4=s.SP_4, method=method)
-        for method in class_['async']:
-            if method != '__init__':
-                test_case += s.class_async_method_signature.format(SP_4=s.SP_4, method=method)
+        print(class_)
+        method_types = ['self', 'class', 'static']
+        for type_ in method_types:
+            for method in class_['def'].get(type_, []):
+
+                if method != '__init__':
+                    test_case += f.test_creation(method, class_['def'][type_][method],
+                                                 class_=class_, class_method_type=type_)
+        imports.append(class_['name'])
     for funct_name in tree['def']:
         # define test for sync function
         print(funct_name)

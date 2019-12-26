@@ -13,6 +13,7 @@ def function_with_constant_return_float():
 def function_with_statement_return():
 	return (1 * 4) * int('3')
 
+
 def function_with_statement_return_based_on_inside_var():
 	dict_var = {'num': 2, 'value_two': 5}
 	return (dict_var['num'] * dict_var['value_two']) * int('3')

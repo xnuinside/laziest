@@ -1,3 +1,5 @@
 clifier
 autopep8==1.4.3
 sphinx==2.2.0
+pytest-timeout
+pytest

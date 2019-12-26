@@ -8,9 +8,9 @@ pytest_async_decorator = "@pytest.mark.asyncio\n"
 pytest_parametrize_decorator = "@pytest.mark.parametrize('params', [])\n"
 method_signature = func_full_prefix + "{method}():\n{SP_4}"
 async_method_signature = pytest_async_decorator + method_signature
-base_class_method_signature = func_full_prefix + "test_{method}(self):\n{SP_4}{SP_4}\n"
-class_method_signature = "\n{SP_4}" + base_class_method_signature
-class_async_method_signature = "\n{SP_4}" + pytest_async_decorator + base_class_method_signature
+base_object_method_signature = func_full_prefix + "test_{method}({self}):\n{SP_4}{SP_4}\n"
+class_method_signature = "\n{SP_4}" + base_object_method_signature
+class_async_method_signature = "\n{SP_4}" + pytest_async_decorator + base_object_method_signature
 class_signature = "class Test{cls_name}:{SP_4}\n"
 
 
