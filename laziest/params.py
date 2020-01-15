@@ -12,26 +12,31 @@ generators = {'str': str_generator(),
 
 def generate_params_based_on_types(null_param: Dict, args: Dict):
 
-    default_param = deepcopy(null_param)
+    params = deepcopy(null_param)
+
+    print('params')
+    print(params)
     for arg in args:
         if 'if' in args[arg]:
-            for value in args[arg]['if']:
-                new_value = deepcopy(default_param)
-                default_param = [default_param]
-                new_value[arg] = value
-                default_param.append(new_value)
+            # 'if': {'values': ['1'], 'return': [{'error': 'Exception'}]}})]),
+            # 'kargs_def': [], 'kargs': None, 'return': None}
+            for num, value in enumerate(args[arg]['if']['values']):
+                if not params[arg]:
+                    params[arg] = []
+
+                params[arg].append({value: args[arg]['if']['return'][num]})
                 args[arg]['type'] = type(value)
 
     for arg in args:
         print(args)
         if 'default' in args.get(arg, []):
-            default_param[arg] = args[arg]['default'] \
+            params[arg] = args[arg]['default'] \
                 if args[arg]['default'] != no_default else randint(0, 7)
         elif 'type' in args[arg] and not isinstance(args[arg]['type'], dict):
-            default_param[0][arg] = generators[map_types(args[arg]['type'])]
+            params[arg] = generators[map_types(args[arg]['type'])]
         else:
-            default_param[0][arg] = randint(0, 7)
-    default_param = tuple(default_param)
+            params[arg] = randint(0, 7)
+    params = tuple(params)
     print('hello')
-    print(default_param)
-    return default_param
+    print(params)
+    return params

@@ -149,13 +149,35 @@ class Analyzer(ast.NodeVisitor):
         variables_names = {}
         print('variables_s')
         if isinstance(node.body[0], _ast.If):
+            print('Iff')
             print(node.body[0].__dict__)
             print(node.body[0].test.__dict__)
             statement = node.body[0].test
+            # we get variables from statement
+            print(statement)
             value = self.get_value(statement.left, variables_names, variables)
+            print('if value from statement')
+            print(value)
+            # we work with args from statements
             if isinstance(value, dict) and 'arg' in value:
-                func_data['args'][value['arg']].update({'if': [self.get_value(
-                    statement.comparators[0], variables_names, variables)]})
+                if 'if' not in func_data['args'][value['arg']]:
+                    func_data['args'][value['arg']]['if'] = {}
+                if 'values' not in func_data['args'][value['arg']]['if']:
+                    func_data['args'][value['arg']]['if']['values'] = [self.get_value(
+                        statement.comparators[0], variables_names, variables)]
+                    print('hi')
+                else:
+                    func_data['args'][value['arg']]['if']['values'].append(value)
+                # we need to get return for this value
+                print(func_data['args'][value['arg']])
+                body = node.body[0].body[0]
+                if_return = self.get_value(body)
+                if 'return' not in func_data['args'][value['arg']]['if']:
+                    func_data['args'][value['arg']]['if']['return'] = [if_return]
+                else:
+                    func_data['args'][value['arg']]['if']['return'].append(if_return)
+                print('if_return')
+                print(if_return)
             print('body')
             print(node.body[0].body[0].__dict__)
             print(node.body[0].body[0].exc.__dict__)
@@ -179,8 +201,10 @@ class Analyzer(ast.NodeVisitor):
         if not class_:
             self.tree['def'][node.name] = func_data
         return func_data
+
     def visit_If(self, node):
         raise Exception(node.__dict__)
+
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)
 
@@ -229,7 +253,16 @@ class Analyzer(ast.NodeVisitor):
             return {self.get_value(key, variables_names, variables):
                         self.get_value(node.values[num], variables_names, variables)
                     for num, key in enumerate(node.keys)}
+        elif isinstance(node, _ast.Raise):
+            print(node.exc)
+            print(node.exc.__dict__)
+            print(node.exc.func)
+            print(node.exc.args[0].__dict__)
+            print(node.exc.func.__dict__)
+            print(node.exc.func.ctx)
 
+            print(node.exc.func.ctx.__dict__)
+            return {'error': node.exc.func.id}
         elif isinstance(node, ast.BinOp):
             return self.parse_bin_op(node, variables_names, variables)
         elif 'func' in node.__dict__ and node.func.id == 'dict':
@@ -244,8 +277,8 @@ class Analyzer(ast.NodeVisitor):
                 print('NameError', e.args)
                 result = None
             return result
-        else:
 
+        else:
             print("new type", node, node.__dict__)
             raise
 

@@ -62,7 +62,6 @@ def run_laziest(args: dict):
 
         # run test file generator
         tf_content = generate_test_file_content(an, path)
-        print(tf_content)
         if append:
             # append new tests to tf
             # if new method in test case for class - insert
@@ -73,9 +72,9 @@ def run_laziest(args: dict):
         proc.kill()
     exit(0)
 
+
 if __name__ == '__main__':
     args = sys.argv
-    print(sys.argv)
     # path  to your file to test
     if len(sys.argv) > 1:
         path = sys.argv[1]
