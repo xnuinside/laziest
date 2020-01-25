@@ -35,8 +35,9 @@ commands:
         ignore to (.gitignore, .dockerignore and etc). \n
           Example: -I .gitignore,folder/.dockerignore"
 
-    - keys: ['-o', '--overwrite']
-      help: "Overwrite test files if exists"
+    - keys: ['-f', '--force']
+      help: "force tests generation. Overwrite tall test files if exists"
+      action: "store_true"
       default: False
 
 

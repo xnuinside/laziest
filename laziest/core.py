@@ -71,14 +71,3 @@ def run_laziest(args: dict):
         proc.wait()
         proc.kill()
     exit(0)
-
-
-if __name__ == '__main__':
-    args = sys.argv
-    # path  to your file to test
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
-    else:
-        path = '/Users/jvolkova/laziest/tests/functional/conditions.py'
-    arg = {'path': path}
-    run_laziest(args=arg)

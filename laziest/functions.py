@@ -31,10 +31,14 @@ def eval_binop_with_params(bin_op, global_params, params):
 
 
 def get_assert_for_params(func_data, params):
+    print('we params')
+    print(params)
     if isinstance(func_data['return'], tuple):
         return_value = []
         for num, _ in enumerate(func_data['return']):
             if 'arg' in func_data['return'][num]:
+                print(func_data['return'])
+                print('returnnn')
                 return_value.append(params[func_data['return'][num]['arg']])
             elif 'BinOp' in func_data['return'][num]:
                 result = eval_binop_with_params(
@@ -107,7 +111,6 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
                 params_line = ', '.join([f'{key}={value}' for key, value in params.items()])
                 instance_ = f'{snake_case_var}  = {class_["name"]}({params_line})'
             func_name = f'{snake_case_var}.{func_name}'
-    print(func_data)
     if func_data['args']:
         # func_definition = s.pytest_parametrize_decorator + func_definition
         # params structure (1-params values, last 'assert' - assert value)
@@ -127,13 +130,12 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
     if not func_data['args']:
         function_header += f' {func_name}()'
     else:
-        print(params)
         functions_headers = []
-        for param in params:
-            params_line = ', '.join([f'{key} = {value}' if not isinstance(
-                value, str) else f'{key} = \"{value}\"' for key, value in param.items()])
-            function_header_per_args = function_header + f' {func_name}({params_line})'
-            functions_headers.append(function_header_per_args)
+        print(params)
+        params_line = ', '.join([f'{key} = {value}' if not isinstance(
+            value, str) else f'{key} = \"{value}\"' for key, value in params.items()])
+        function_header_per_args = function_header + f' {func_name}({params_line})'
+        functions_headers.append(function_header_per_args)
 
     eq_line = " is " if func_data['return'] is None else f" == "
     if isinstance(func_data['return'], dict):
@@ -164,3 +166,5 @@ def test_creation(func_name: Text, func_data: Dict, async_type: bool = False,
     func_definition = test_body_resolver(func_definition, func_name, func_data, class_, class_method_type)
     func_definition += "\n\n\n"
     return func_definition
+
+
