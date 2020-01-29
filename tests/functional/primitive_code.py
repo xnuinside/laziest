@@ -39,7 +39,6 @@ def function_with_str():
 	return (dict_var['num'] * alias_var['value_two']) + second_dir['int']
 
 
-
 def function_with_str_and_type_error():
 	dict_var = {'num': 'mama', 'value_two': 5}
 	second_dir = {'int': 23}
