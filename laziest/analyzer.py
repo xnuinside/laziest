@@ -56,7 +56,6 @@ class Analyzer(ast.NodeVisitor):
         :return:
         """
 
-        return_value = None
 
         if not global_vars:
             # create global vars dict for eval value
@@ -69,9 +68,14 @@ class Analyzer(ast.NodeVisitor):
             var_name = name_er.args[0].split('\'')[1]
             if name_er in self.func_data['args']:
                 # if name is a function's parameter
+
+                print(self.func_data['args'])
+                print('args')
                 return_value = {'BinOp': code_line, 'global_vars': global_vars}
             elif var_name in variables_names:
                 # if name in variables (assignment statements)
+                print(var_name)
+                print('var_name')
                 variable = variables[variables_names[var_name]]
                 if isinstance(variable.value, _ast.Dict):
                     # add to globals
@@ -134,6 +138,8 @@ class Analyzer(ast.NodeVisitor):
                     global_vars.update({name: self.get_value(variables[variables_names[name]])})
 
             return_value = self.get_bin_op_value(code_line, variables, variables_names, global_vars)
+            print('bin op ')
+            print(return_value)
         except UnboundLocalError:
             return_value = {'BinOp': code_line, 'global_vars': global_vars}
         return return_value
@@ -159,12 +165,13 @@ class Analyzer(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node, class_=None):
         """ main methods to """
-        func_data = {'args': self.get_function_args(node),
+        print(self.tree)
+        func_date = {'args': self.get_function_args(node),
                      'kargs_def': node.args.kw_defaults,
                      'kargs': node.args.kwarg,
                      'return': []}
-        if not class_:
-            self.func_data = func_data
+
+        self.func_data = func_date
         # local variables, assign statements in function body
         variables = [node for node in node.body if isinstance(node, ast.Assign)]
         variables_names = {}
@@ -177,18 +184,20 @@ class Analyzer(ast.NodeVisitor):
         self.variables_names = deepcopy(variables_names)
         if isinstance(node.body[0], _ast.If):
             # if we have if statements in code
-            self.process_if_construction(node.body[0].test, func_data, variables_names, variables)
+            self.process_if_construction(node.body[0].test, self.func_data, variables_names, variables)
 
         non_variables_nodes_bodies = [node for node in node.body if node not in variables]
 
         for body_item in non_variables_nodes_bodies:
             if isinstance(body_item, ast.Return):
-                func_data['return'].append({'args': {},
-                                            'result': self.get_value(body_item.value, variables_names, variables)})
-                print(func_data['return'])
+                return_ = {'args': {}, 'result': self.get_value(body_item.value, variables_names, variables)}
+                func_date['return'].append(return_)
+                print('return___')
+                print(return_)
+        print(func_date['return'])
         if not class_:
-            self.tree['def'][node.name] = func_data
-        return func_data
+            self.tree['def'][node.name] = deepcopy(func_date)
+        return func_date
 
     def visit_If(self, node):
         raise Exception(node.__dict__)
@@ -196,7 +205,7 @@ class Analyzer(ast.NodeVisitor):
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)
 
-    def get_value(self, node: Any, variables_names=None, variables=None):
+    def get_value(self, node: Any, variables_names: Dict = None, variables: Dict = None) -> Any:
         node_type = node.__class__
         if not variables:
             variables = self.variables or []

@@ -8,8 +8,6 @@ from laziest.asserter import return_assert_value
 
 reserved_words = ['self', 'cls']
 
-normal_types = [int, str, list, dict, tuple, set, bytearray, bytes]
-
 
 def get_method_signature(func_name: Text, async_type: bool, class_name=None) -> Text:
     if class_name:
@@ -19,64 +17,6 @@ def get_method_signature(func_name: Text, async_type: bool, class_name=None) -> 
     func_definition = method_signature.format(SP_4=s.SP_4, method=func_name)
     return func_definition
 
-
-def eval_binop_with_params(bin_op, global_params, params):
-    """
-        eval binop with params to get result
-    :param bin_op:
-    :param global_params:
-    :param params:
-    :return:
-    """
-    global_params.update(params)
-    try:
-        return_value = eval(bin_op, global_params)
-    except Exception as e:
-        analyzer.pytest_needed = True
-        return_value = {'error': (e.__class__, e,)}
-    return return_value
-
-
-def get_assert_for_params(func_data, params):
-    print('we params')
-    print(params)
-    if isinstance(func_data['return'], tuple):
-        return_value = []
-        for num, _ in enumerate(func_data['return']):
-            if 'arg' in func_data['return'][num]:
-                print(func_data['return'])
-                print('returnnn')
-                return_value.append(params[func_data['return'][num]['arg']])
-            elif 'BinOp' in func_data['return'][num]:
-                result = eval_binop_with_params(
-                    func_data['return'][num]['BinOp'],
-                    func_data['return'][num].get('global_vars', {}),
-                    params)
-                if isinstance(result, dict) and 'error' in result:
-                    return_value = result
-                    break
-                else:
-                    return_value.append(result)
-            elif type(func_data['return'][num] in normal_types):
-                return_value.append(func_data['return'][num])
-        if isinstance(return_value, list):
-            return_value = tuple(return_value)
-    elif isinstance(func_data['return'], dict) and 'BinOp' in func_data['return']:
-        return_value = eval_binop_with_params(func_data['return']['BinOp'], func_data['return'].get(
-            'global_vars', {}), params)
-    elif isinstance(func_data['return'], dict) and 'arg' in func_data['return']:
-        return_value = params[func_data['return']['arg']]
-    elif func_data['return'] is None:
-        return_value = None
-    else:
-        print('return')
-        print(func_data)
-        print(func_data['return'])
-        raise Exception(func_data['return'])
-    print('return_value')
-    print(return_value)
-    print(func_data)
-    return {'args': params, 'result': return_value}
 
 
 def convert(name):
@@ -145,42 +85,29 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
 
     if class_:
         func_name = class_methods_names_create(func_name, class_, class_method_type)
-    if func_data['args']:
-        # func_definition = s.pytest_parametrize_decorator + func_definition
-        # params structure (1-params values, last 'assert' - assert value)
-        null_param = {a: None for a in func_data['args']}
-        if class_method_type != 'static':
-            func_data['args'] = {x: func_data['args'][x] for x in deepcopy(null_param)
-                                 if x not in reserved_words}
-            null_param = {x: null_param[x]
-                          for x in null_param if x not in reserved_words}
-        params = generate_params_based_on_types(null_param, func_data['args'])
-        params_assert = get_assert_for_params(func_data, params)
-        func_data['return'] = params_assert
     if not instance_:
         function_header = s.assert_string
     else:
         function_header = instance_ + "\n" + s.SP_4 + s.assert_string
-    if not func_data['args']:
-        function_header += f' {func_name}()'
-    else:
-        functions_headers = []
-        print(params)
-        params_line = ', '.join([f'{key} = {value}' if not isinstance(
-            value, str) else f'{key} = \"{value}\"' for key, value in params.items()])
-        function_header_per_args = function_header + f' {func_name}({params_line})'
-        functions_headers.append(function_header_per_args)
 
     asserts_definition = []
     for args, return_value, comment in return_assert_value(func_data):
+        # form text functions bodies based on args, return_values and comments
+        if not args:
+            function_header += f' {func_name}()'
+        else:
+            params_line = ', '.join([f'{key} = {value}' if not isinstance(
+                value, str) else f'{key} = \"{value}\"' for key, value in args.items()])
+            function_header = function_header + f' {func_name}({params_line})'
         if comment:
             # mean we have an error rise
             asserts_definition_str = f" with pytest.raises({return_value}): \n# {comment} \n" \
-                               f"{s.SP_4}{s.SP_4}{func_name}()"
+                               f"{s.SP_4}{s.SP_4}{function_header}"
         else:
             eq_line = " is " if return_value is None else f" == "
+
             return_value = str(return_value) if not isinstance(return_value, str) else f"\'{return_value}\'"
-            asserts_definition_str = func_name + '()' + f"{eq_line}" + return_value + f"\n{s.SP_4}"
+            asserts_definition_str = function_header + f"{eq_line}" + return_value + f"\n{s.SP_4}"
         asserts_definition.append(asserts_definition_str)
     for assert_ in asserts_definition:
         func_definition += f"\n{s.SP_4}" + assert_
