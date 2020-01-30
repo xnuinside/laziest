@@ -12,6 +12,7 @@ generators = {'str': str_generator(),
 def generate_params_based_on_types(null_param: Dict, args: Dict):
 
     default_param = deepcopy(null_param)
+    print(default_param)
     for arg in args:
         if 'if' in args[arg]:
             for value in args[arg]['if']:
@@ -21,14 +22,6 @@ def generate_params_based_on_types(null_param: Dict, args: Dict):
                 default_param.append(new_value)
                 args[arg]['type'] = type(value)
 
-    for arg in args:
-        print(args)
-        if 'default' in args.get(arg, []):
-            default_param[arg] = args[arg]['default']
-        elif 'type' in args[arg] and not isinstance(args[arg]['type'], dict):
-            default_param[arg] = generators[map_types(args[arg]['type'])]
-        else:
-            default_param[arg] = randint(0, 7)
     print('hello')
     print(default_param)
     return default_param

@@ -8,7 +8,7 @@ from typing import Any, Text, Dict
 from pprint import pprint
 from collections import defaultdict, OrderedDict
 from laziest import ast_meta as meta
-
+from operator import eq
 pytest_needed = False
 
 
@@ -102,9 +102,7 @@ class Analyzer(ast.NodeVisitor):
         except Exception as e:
             global pytest_needed
             pytest_needed = True
-            return_value = {'error': (e.__class__, e, )}
-            print(return_value)
-            print('errrror')
+            return_value = {'error': e.__class__.__name__, 'comment': e}
         return return_value
 
     def parse_bin_op(self, node, variables_names, variables, global_vars=None):
@@ -146,22 +144,13 @@ class Analyzer(ast.NodeVisitor):
 
     def process_if_construction(self, statement, func_data, variables_names, variables):
         # we get variables from statement
-        value = self.get_value(statement.left, variables_names, variables)
+        value = self.get_value(statement.test, variables_names, variables)
         # we work with args from statements
-        if isinstance(value, dict) and 'arg' in value:
-            if 'if' not in func_data['args'][value['arg']]:
-                func_data['args'][value['arg']]['if'] = {}
-            if 'values' not in func_data['args'][value['arg']]['if']:
-                func_data['args'][value['arg']]['if']['values'] = [self.get_value(
-                    statement.comparators[0], variables_names, variables)]
-            else:
-                func_data['args'][value['arg']]['if']['values'].append(value)
-            body = statement.body[0]
-            if_return = self.get_value(body)
-            if 'return' not in func_data['return'][value['arg']]['if']:
-                func_data['return'][value['arg']]['if']['return'] = [if_return]
-            else:
-                func_data['return'][value['arg']]['if']['return'].append(if_return)
+        if value['ops'] == '==':
+            args = {value['left']['args']: value['comparators']}
+            func_data['return'].append({'args': args, 'result': self.get_value(statement.body[0])})
+        print(func_data)
+        return func_data
 
     def visit_FunctionDef(self, node, class_=None):
         """ main methods to """
@@ -182,9 +171,7 @@ class Analyzer(ast.NodeVisitor):
                 variables_names.update(var_names)
         self.variables = variables
         self.variables_names = deepcopy(variables_names)
-        if isinstance(node.body[0], _ast.If):
-            # if we have if statements in code
-            self.process_if_construction(node.body[0].test, self.func_data, variables_names, variables)
+
 
         non_variables_nodes_bodies = [node for node in node.body if node not in variables]
 
@@ -194,6 +181,20 @@ class Analyzer(ast.NodeVisitor):
                 func_date['return'].append(return_)
                 print('return___')
                 print(return_)
+            if isinstance(body_item, _ast.If):
+                # if we have if statements in code
+                print('IFFF')
+                print(node.body[0])
+
+                print(node.body[0])
+                func_date = self.process_if_construction(body_item,
+                                                              self.func_data, variables_names, variables)
+                print('FUNC')
+                print(func_date)
+            print('BODY')
+            print(body_item)
+
+            print(body_item.__dict__)
         print(func_date['return'])
         if not class_:
             self.tree['def'][node.name] = deepcopy(func_date)
@@ -224,7 +225,7 @@ class Analyzer(ast.NodeVisitor):
                 return self.get_value(variable, variables_names, variables)
             elif alias in self.func_data['args']:
                     print("argument found")
-                    return {'arg': node.id}
+                    return {'args': node.id}
             else:
                 print(node)
                 raise Exception(node.id)
@@ -236,7 +237,7 @@ class Analyzer(ast.NodeVisitor):
                         self.get_value(node.values[num], variables_names, variables)
                     for num, key in enumerate(node.keys)}
         elif isinstance(node, _ast.Raise):
-            return {'error': node.exc.func.id}
+            return {'error': node.exc.func.id, 'comment': self.get_value(node.exc.args[0])}
         elif isinstance(node, ast.BinOp):
             return self.parse_bin_op(node, variables_names, variables)
         elif 'func' in node.__dict__ and node.func.id == 'dict':
@@ -251,7 +252,16 @@ class Analyzer(ast.NodeVisitor):
                 print('NameError', e.args)
                 result = None
             return result
-
+        elif isinstance(node, _ast.Compare):
+            print(node.__dict__)
+            result = {'left': self.get_value(node.left, variables_names, variables),
+                      'ops': self.get_value(node.ops[0], variables_names, variables),
+                      'comparators': self.get_value(node.comparators[0], variables_names, variables)}
+            print(result)
+            print('compare')
+            return result
+        elif isinstance(node, _ast.Eq):
+            return '=='
         else:
             print("new type", node, node.__dict__)
             raise
@@ -307,7 +317,7 @@ class Analyzer(ast.NodeVisitor):
                     defaults.append(item.value)
 
             if len(args) > len(defaults):
-                [defaults.insert(0, no_default)
+                [defaults.insert(0, 'no_default')
                  for _ in range(len(args) - len(defaults))]
             for num, arg in enumerate(args):
                 args[arg]['default'] = defaults[num]

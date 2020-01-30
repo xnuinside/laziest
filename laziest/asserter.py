@@ -18,19 +18,16 @@ def return_assert_value(func_data):
                           #for x in null_param if x not in reserved_words}
         params = generate_params_based_on_types(null_param, func_data['args'])
         params_assert = get_assert_for_params(func_data, params)
-        func_data['return'] = params_assert
     for return_pack in func_data['return']:
         print(return_pack)
         print("func_data['return']")
         print(func_data['return'])
         args = return_pack['args']
+        print(args)
         if isinstance(return_pack['result'], dict) and 'error' in return_pack['result']:
             # if we have exception
-            print(str(return_pack['result']['error'][0]))
-            print("comment")
-            print(return_pack['result']['error'][0])
-            return_value = str(return_pack['result']['error'][0]).split('\'')[1]
-            comment = return_pack['result']['error'][1]
+            return_value = return_pack['result']['error']
+            comment = return_pack['result']['comment']
         else:
             return_value = return_pack['result']
         yield args, return_value, comment
@@ -42,7 +39,8 @@ def get_assert_for_params(func_data, params):
     print(params)
     return_value = None
     for return_pack in func_data['return']:
-        if isinstance(return_pack['result'], tuple):
+        result = return_pack.get('result', {})
+        if isinstance(result, tuple):
             return_value = []
             for num, _ in enumerate(return_pack['result']):
                 if isinstance(return_pack['result'][num], dict):
@@ -64,24 +62,25 @@ def get_assert_for_params(func_data, params):
                     return_value.append(return_pack['result'][num])
             if isinstance(return_value, list):
                 return_value = tuple(return_value)
-        elif isinstance(return_pack['result'], dict) and 'BinOp' in return_pack['result']:
+        elif isinstance(result, dict) and 'BinOp' in result:
             return_value = eval_binop_with_params(return_pack['result']['BinOp'], return_pack['result'].get(
                 'global_vars', {}), params)
-        elif isinstance(return_pack['result'], dict) and 'arg' in return_pack['result']:
+        elif isinstance(result, dict) and 'args' in result:
             print(return_pack)
             print('return_pack')
-            return_value = params[return_pack['result']['arg']]
             print(return_value)
-        elif return_pack['result'] is None:
+            params = result['args']
+        elif result is None:
             return_value = None
         else:
             print('return')
             print(func_data)
             print(func_data['return'])
-            return_value = return_pack['result']
+            return_value = result
     print('return_value')
     print(return_value)
     print(func_data)
+    print(params)
     return [{'args': params, 'result': return_value}]
 
 
