@@ -8,13 +8,19 @@ from typing import Any, Text, Dict
 from pprint import pprint
 from collections import defaultdict, OrderedDict
 from laziest import ast_meta as meta
-from operator import eq
+from random import randint
+
 pytest_needed = False
 
 
 class Analyzer(ast.NodeVisitor):
     """ class to parse files in dict structure to provide to generator data,
     that needed for tests generation """
+
+    operators = {
+        _ast.Eq: '==',
+        _ast.Gt: '>'
+    }
 
     def __init__(self, source: Text):
         """
@@ -142,15 +148,68 @@ class Analyzer(ast.NodeVisitor):
             return_value = {'BinOp': code_line, 'global_vars': global_vars}
         return return_value
 
-    def process_if_construction(self, statement, func_data, variables_names, variables):
+    def process_if_construction(self, statement, func_data, variables_names, variables, previous_statements=None):
+        if previous_statements is None:
+            previous_statements = []
         # we get variables from statement
+        print(statement.__dict__)
         value = self.get_value(statement.test, variables_names, variables)
         # we work with args from statements
+        print('inifvalue')
+        print(value)
+        args = {}
+        previous_statements.append(value)
         if value['ops'] == '==':
             args = {value['left']['args']: value['comparators']}
-            func_data['return'].append({'args': args, 'result': self.get_value(statement.body[0])})
+        elif value['ops'] == '>':
+            args = {value['left']['args']: value['comparators'] + randint(1, 100)}
+        result = self.get_value(statement.body[0])
+        index = len(func_data['return'])
+        if 'print' in result:
+            result = result['print']['text'].replace('    ', '')
+        func_data['return'].append({'args': args, 'result': result})
+        print(index)
+        func_data['return'][index]['log'] = True
+        for orelse in statement.orelse:
+            print(orelse.__dict__)
+            print(type(orelse))
+            print('orrrr')
+            if isinstance(orelse, _ast.If):
+                func_data = self.process_if_construction(
+                    orelse, func_data, variables_names, variables, previous_statements)
+            elif isinstance(orelse, ast.Return):
+                func_data['return'].append(self.generate_result_based_on_previous_conditions(
+                    orelse.value, variables_names, variables, previous_statements))
+
         print(func_data)
         return func_data
+
+    def generate_result_based_on_previous_conditions(
+            self, return_node, variables_names, variables, previous_statements):
+        return_value = self.get_value(return_node)
+        print(return_value)
+        if 'args' in return_value:
+            args_statements = []
+            wrong_values = []
+            default_value = 1000
+            left_border = -default_value
+            right_border = default_value
+            for statement in previous_statements:
+                if statement['left']['args'] == return_value['args']:
+                    if statement['ops'] == '==':
+                        wrong_values.append(statement['comparators'])
+                    elif statement['ops'] == '>':
+                        right_border = statement['comparators'] - 1
+                    elif statement['ops'] == '<':
+                        left_border = statement['comparators'] + 1
+            if left_border != (-default_value) or right_border != default_value:
+                # we have int
+                generate_value = [randint(left_border, right_border) for _ in range(0, 3)]
+                for val in generate_value:
+                    for wr_val in wrong_values:
+                        if val != wr_val:
+                            return_value['result'] = val
+        return {'args': {return_value['args']: val}, 'result': return_value['result']}
 
     def visit_FunctionDef(self, node, class_=None):
         """ main methods to """
@@ -224,8 +283,8 @@ class Analyzer(ast.NodeVisitor):
                 variable = variables[variables_names[alias]]
                 return self.get_value(variable, variables_names, variables)
             elif alias in self.func_data['args']:
-                    print("argument found")
-                    return {'args': node.id}
+                print("argument found")
+                return {'args': node.id}
             else:
                 print(node)
                 raise Exception(node.id)
@@ -243,27 +302,31 @@ class Analyzer(ast.NodeVisitor):
         elif 'func' in node.__dict__ and node.func.id == 'dict':
             return eval("{}({})".format(node.func.id, "".join([str("{}={},".format(
                 x.arg, self.get_value(x.value, variables_names, variables))) for x in node.keywords])))
-        elif 'func' in node.__dict__:
-            print(node.func.__dict__)
-            try:
-                result = eval("{}({})".format(node.func.id,
-                                              [str(self.get_value(x, variables_names, variables)) for x in node.args]))
-            except NameError as e:
-                print('NameError', e.args)
-                result = None
-            return result
         elif isinstance(node, _ast.Compare):
-            print(node.__dict__)
             result = {'left': self.get_value(node.left, variables_names, variables),
                       'ops': self.get_value(node.ops[0], variables_names, variables),
                       'comparators': self.get_value(node.comparators[0], variables_names, variables)}
-            print(result)
-            print('compare')
             return result
-        elif isinstance(node, _ast.Eq):
-            return '=='
+        elif type(node) in self.operators:
+            return self.operators[type(node)]
+        elif isinstance(node, _ast.Expr):
+            return self.get_value(node.value)
+        elif isinstance(node, _ast.Call):
+            return {node.func.id: [self.get_value(arg) for arg in node.args][0]}
+        elif isinstance(node, _ast.JoinedStr):
+            # TODO: need to make normal process
+            print(node.__dict__)
+
+            result = {'text': self.source[node.lineno - 1][node.col_offset:-1]}
+            print(result)
+            return result
+        elif isinstance(node, _ast.FormattedValue):
+            print(node.value.__dict__)
+            return self.get_value(node.value)
         else:
-            print("new type", node, node.__dict__)
+            print("new type",
+                  node,
+                  node.__dict__)
             raise
 
     def get_function_args(self, body_item: _ast.Name):

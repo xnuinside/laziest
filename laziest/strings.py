@@ -12,7 +12,7 @@ base_object_method_signature = func_full_prefix + "test_{method}({self}):\n{SP_4
 class_method_signature = "\n{SP_4}" + base_object_method_signature
 class_async_method_signature = "\n{SP_4}" + pytest_async_decorator + base_object_method_signature
 class_signature = "class Test{cls_name}:{SP_4}\n"
-
+log_capsys_str = 'captured = capsys.readouterr()'
 
 assert_string = "assert"
 # infos

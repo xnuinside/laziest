@@ -1,8 +1,6 @@
 from typing import Dict, Text
 from laziest import strings as s
 import re
-from copy import deepcopy
-from laziest import analyzer
 from laziest.params import generate_params_based_on_types
 from laziest.asserter import return_assert_value
 
@@ -16,7 +14,6 @@ def get_method_signature(func_name: Text, async_type: bool, class_name=None) -> 
     # create test method signature
     func_definition = method_signature.format(SP_4=s.SP_4, method=func_name)
     return func_definition
-
 
 
 def convert(name):
@@ -86,23 +83,36 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
     if class_:
         func_name = class_methods_names_create(func_name, class_, class_method_type)
     if not instance_:
-        function_header = s.assert_string
+        function_header_init = s.assert_string
     else:
-        function_header = instance_ + "\n" + s.SP_4 + s.assert_string
+        function_header_init = instance_ + "\n" + s.SP_4 + s.assert_string
 
     asserts_definition = []
-    for args, return_value, comment in return_assert_value(func_data):
+    imports = []
+    log = False
+    for args, return_value, comment, log_ in return_assert_value(func_data):
         # form text functions bodies based on args, return_values and comments
+        if log_:
+            function_header = f'{func_name}'
+        else:
+            function_header = function_header_init + f' {func_name}'
         if not args:
-            function_header += f' {func_name}()'
+            function_header += '()'
         else:
             params_line = ', '.join([f'{key} = {value}' if not isinstance(
                 value, str) else f'{key} = \"{value}\"' for key, value in args.items()])
-            function_header = function_header + f' {func_name}({params_line})'
+            function_header += f'({params_line})'
         if comment:
-            # mean we have an error rise
-            asserts_definition_str = f" with pytest.raises({return_value}): \n# {comment} \n" \
+            # mean we have an error raise
+            if return_value not in globals()['__builtins__']:
+                imports.append(return_value)
+            asserts_definition_str = f"with pytest.raises({return_value}): \n{s.SP_4}{s.SP_4}# {comment} \n" \
                                f"{s.SP_4}{s.SP_4}{function_header}"
+        elif log_:
+            log = True
+            str_ = f"\'{eval(return_value, args)}\\n\'"
+            asserts_definition_str = function_header + f"\n{s.SP_4}" + s.log_capsys_str + "\n" +  \
+                                     f"{s.SP_4}assert captured.out == {str_}\n"
         else:
             eq_line = " is " if return_value is None else f" == "
 
@@ -111,7 +121,7 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
         asserts_definition.append(asserts_definition_str)
     for assert_ in asserts_definition:
         func_definition += f"\n{s.SP_4}" + assert_
-    return func_definition
+    return func_definition, log, imports
 
 
 def test_creation(func_name: Text, func_data: Dict, async_type: bool = False,
@@ -120,9 +130,14 @@ def test_creation(func_name: Text, func_data: Dict, async_type: bool = False,
     if class_:
         func_definition = get_method_signature(func_name, async_type, class_['name'])
     else:
-        func_definition = get_method_signature(func_name, async_type)
-    func_definition = test_body_resolver(func_definition, func_name, func_data, class_, class_method_type)
+        metod_signature = get_method_signature(func_name, async_type)
+        func_definition = metod_signature
+    func_definition, log, imports = test_body_resolver(func_definition, func_name, func_data, class_, class_method_type)
     func_definition += "\n\n\n"
-    return func_definition
+    if log:
+        method_signature_with_capture = metod_signature.replace('()', '(capsys)')
+        print(method_signature_with_capture)
+        func_definition = func_definition.replace(metod_signature, method_signature_with_capture)
+    return func_definition, imports
 
 

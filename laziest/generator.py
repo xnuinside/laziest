@@ -31,7 +31,10 @@ def generate_tests(tree: Dict):
     for funct_name in tree['def']:
         # define test for sync function
         print(funct_name)
-        test_case += f.test_creation(funct_name, tree['def'][funct_name])
+        unit_test, funct_imports = f.test_creation(funct_name, tree['def'][funct_name])
+        for import_ in funct_imports:
+            imports.append(import_)
+        test_case += unit_test
         imports.append(funct_name)
     for async_funct_name in tree['async']:
         # define test for async function

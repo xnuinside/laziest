@@ -8,6 +8,8 @@ from laziest.utils import map_types
 generators = {'str': str_generator(),
               'need_to_define': 'need_to_define_generator'}
 
+no_default = 'no_default'
+
 
 def generate_params_based_on_types(null_param: Dict, args: Dict):
 
@@ -22,6 +24,15 @@ def generate_params_based_on_types(null_param: Dict, args: Dict):
                 default_param.append(new_value)
                 args[arg]['type'] = type(value)
 
+    for arg in args:
+        print(args)
+        if 'default' in args.get(arg, []):
+            default_param[arg] = args[arg]['default'] \
+                if args[arg]['default'] != no_default else randint(0, 7)
+        elif 'type' in args[arg] and not isinstance(args[arg]['type'], dict):
+            default_param[arg] = generators[map_types(args[arg]['type'])]
+        else:
+            default_param[arg] = randint(0, 7)
     print('hello')
     print(default_param)
     return default_param

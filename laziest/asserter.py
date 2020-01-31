@@ -4,7 +4,6 @@ normal_types = [int, str, list, dict, tuple, set, bytearray, bytes]
 
 
 def return_assert_value(func_data):
-    comment = None
     if not func_data['return']:
         func_data['return'] = [{'args': (), 'result': None}]
     if func_data['args']:
@@ -19,24 +18,27 @@ def return_assert_value(func_data):
         params = generate_params_based_on_types(null_param, func_data['args'])
         params_assert = get_assert_for_params(func_data, params)
     for return_pack in func_data['return']:
+        comment = None
         print(return_pack)
         print("func_data['return']")
         print(func_data['return'])
         args = return_pack['args']
-        print(args)
+        if not args:
+            args = params
         if isinstance(return_pack['result'], dict) and 'error' in return_pack['result']:
             # if we have exception
             return_value = return_pack['result']['error']
             comment = return_pack['result']['comment']
         else:
+
+            if isinstance(return_pack['result'], dict)  and 'args' in return_pack['result']:
+
+                return_pack['result'] = args[return_pack['result']['args']]
             return_value = return_pack['result']
-        yield args, return_value, comment
+        yield args, return_value, comment, return_pack.get('log', False)
 
 
 def get_assert_for_params(func_data, params):
-    print('we params')
-    print(func_data)
-    print(params)
     return_value = None
     for return_pack in func_data['return']:
         result = return_pack.get('result', {})
@@ -66,9 +68,6 @@ def get_assert_for_params(func_data, params):
             return_value = eval_binop_with_params(return_pack['result']['BinOp'], return_pack['result'].get(
                 'global_vars', {}), params)
         elif isinstance(result, dict) and 'args' in result:
-            print(return_pack)
-            print('return_pack')
-            print(return_value)
             params = result['args']
         elif result is None:
             return_value = None
