@@ -6,6 +6,7 @@ normal_types = [int, str, list, dict, tuple, set, bytearray, bytes]
 def return_assert_value(func_data):
     if not func_data['return']:
         func_data['return'] = [{'args': (), 'result': None}]
+    params = {}
     if func_data['args']:
         # func_definition = s.pytest_parametrize_decorator + func_definition
         # params structure (1-params values, last 'assert' - assert value)
@@ -25,6 +26,8 @@ def return_assert_value(func_data):
         args = return_pack['args']
         if not args:
             args = params
+        if 'BinOp' in return_pack:
+            return_pack = params_assert
         if isinstance(return_pack['result'], dict) and 'error' in return_pack['result']:
             # if we have exception
             return_value = return_pack['result']['error']
@@ -51,9 +54,9 @@ def get_assert_for_params(func_data, params):
                         print('returnnn')
                         return_value.append(params[return_pack['result'][num]['arg']])
                     elif 'BinOp' in return_pack['result'][num]:
-                        result = eval_binop_with_params(
-                            return_pack['result'][num]['BinOp'],
-                            return_pack['result'][num].get('global_vars', {}),
+                        return_pack['BinOp'] = True
+                        result = eval_binop_with_params(return_pack['result'][num]['BinOp'],
+                            return_pack['result'][num].get('binop_args', {}),
                             params)
                         if isinstance(result, dict) and 'error' in result:
                             return_value = result
@@ -65,8 +68,10 @@ def get_assert_for_params(func_data, params):
             if isinstance(return_value, list):
                 return_value = tuple(return_value)
         elif isinstance(result, dict) and 'BinOp' in result:
+
+            return_pack['BinOp'] = True
             return_value = eval_binop_with_params(return_pack['result']['BinOp'], return_pack['result'].get(
-                'global_vars', {}), params)
+                'binop_args', {}), params)
         elif isinstance(result, dict) and 'args' in result:
             params = result['args']
         elif result is None:
@@ -76,11 +81,8 @@ def get_assert_for_params(func_data, params):
             print(func_data)
             print(func_data['return'])
             return_value = result
-    print('return_value')
-    print(return_value)
-    print(func_data)
-    print(params)
-    return [{'args': params, 'result': return_value}]
+    print({'args': params, 'result': return_value})
+    return {'args': params, 'result': return_value}
 
 
 def eval_binop_with_params(bin_op, global_params, params):
@@ -93,8 +95,12 @@ def eval_binop_with_params(bin_op, global_params, params):
     """
     global_params.update(params)
     try:
+
         return_value = eval(bin_op, global_params)
+        print(return_value)
+        print('BinOppp')
+
     except Exception as e:
         analyzer.pytest_needed = True
-        return_value = {'error': (e.__class__, e,)}
+        return_value = {'error': e.__class__.__name__, 'comment': e}
     return return_value

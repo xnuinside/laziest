@@ -50,7 +50,7 @@ class Analyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def get_bin_op_value(self, code_line: int, variables: Dict,
-                         variables_names: Dict, global_vars: Dict = None) -> Any:
+                         variables_names: Dict, global_vars: Dict = None, binop_vars: Dict = None) -> Any:
         """
             method to get result value of execution BinOp
 
@@ -61,8 +61,8 @@ class Analyzer(ast.NodeVisitor):
         :param global_vars:
         :return:
         """
-
-
+        if binop_vars is None:
+            binop_vars = {}
         if not global_vars:
             # create global vars dict for eval value
             global_vars = {}
@@ -77,7 +77,7 @@ class Analyzer(ast.NodeVisitor):
 
                 print(self.func_data['args'])
                 print('args')
-                return_value = {'BinOp': code_line, 'global_vars': global_vars}
+                return_value = {'BinOp': code_line, 'global_vars': binop_vars}
             elif var_name in variables_names:
                 # if name in variables (assignment statements)
                 print(var_name)
@@ -85,26 +85,30 @@ class Analyzer(ast.NodeVisitor):
                 variable = variables[variables_names[var_name]]
                 if isinstance(variable.value, _ast.Dict):
                     # add to globals
-                    global_vars.update({var_name: {
+                    binop_vars.update({var_name: {
                         self.get_value(key): self.get_value(variable.value.values[num])
                         for num, key in enumerate(variable.value.keys)}
                     })
+                    global_vars.update(binop_vars)
                 elif isinstance(variable.value, _ast.Name):
                     # mean that our variable linked to another
                     alias = variable.value.id
                     if alias not in global_vars and alias in variables_names:
                         variable = variables[variables_names[var_name]]
-                        global_vars.update({
+                        binop_vars.update({
                             alias: {
                                 self.get_value(key, variables_names, variables):
                                     self.get_value(variable.value.values[num])
                                 for num, key in enumerate(variable.value.keys)
                             }})
+                        global_vars.update(binop_vars)
                     else:
-                        global_vars.update({var_name: global_vars.get(alias)})
+                        binop_vars.update({var_name: global_vars.get(alias)})
+                        global_vars.update(binop_vars)
                 else:
-                    global_vars.update({var_name: self.get_value(variable.value)})
-                return self.get_bin_op_value(code_line, variables, variables_names, global_vars)
+                    binop_vars.update({var_name: self.get_value(variable.value)})
+                    global_vars.update(binop_vars)
+                return self.get_bin_op_value(code_line, variables, variables_names, global_vars, binop_vars)
         except Exception as e:
             global pytest_needed
             pytest_needed = True
@@ -136,16 +140,18 @@ class Analyzer(ast.NodeVisitor):
             code_line = code_line[col_offset:].split(',')[0]
         code_line = re.sub(r'^\s+|\s+$', '', code_line)
         try:
+            binop_args = {}
             variables_in_bin_op = code_line.split()
             for name in variables_in_bin_op:
                 if name in variables_names:
-                    global_vars.update({name: self.get_value(variables[variables_names[name]])})
+                    binop_args.update({name: self.get_value(variables[variables_names[name]])})
+                    global_vars.update(binop_args)
 
             return_value = self.get_bin_op_value(code_line, variables, variables_names, global_vars)
             print('bin op ')
             print(return_value)
         except UnboundLocalError:
-            return_value = {'BinOp': code_line, 'global_vars': global_vars}
+            return_value = {'BinOp': code_line, 'binop_args': binop_args}
         return return_value
 
     def process_if_construction(self, statement, func_data, variables_names, variables, previous_statements=None):

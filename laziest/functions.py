@@ -110,6 +110,7 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
                                f"{s.SP_4}{s.SP_4}{function_header}"
         elif log_:
             log = True
+            print('LOGG')
             str_ = f"\'{eval(return_value, args)}\\n\'"
             asserts_definition_str = function_header + f"\n{s.SP_4}" + s.log_capsys_str + "\n" +  \
                                      f"{s.SP_4}assert captured.out == {str_}\n"
