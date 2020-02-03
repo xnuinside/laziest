@@ -23,7 +23,6 @@ def function_with_binary_op_on_several_args_and_tuple_return_multiple_BinOps(arg
 	var = 'one'
 	return arg1 * arg2 + arg3, var * arg1
 
-
 def funct_with_multiple_alias(arg1, arg2, arg3):
 	var = 'one'
 	alias = var

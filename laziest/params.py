@@ -17,18 +17,14 @@ def generate_params_based_on_types(null_param: Dict, args: Dict, previous_statem
     if previous_statements and return_pack:
         # we have a functions with ifs
         params = generate_value_in_borders(previous_statements, args, null_param)
-        print("STATS")
-        print(params)
     else:
         params = gen_params(args, params)
-    print(params)
     return params
 
 
 def gen_params(args, null_param):
     params = deepcopy(null_param)
     for arg in args:
-        print(args)
         if 'if' in args[arg]:
             for value in args[arg]['if']:
                 new_value = deepcopy(null_param)

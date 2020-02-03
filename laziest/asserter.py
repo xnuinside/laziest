@@ -21,7 +21,7 @@ def return_assert_value(func_data):
             # if no ifs statements
             pack_param_strategy = generate_params_based_on_types(null_param, func_data['args'])
             # get result for this strategy
-            return_value = get_assert_for_params(func_data, pack_param_strategy)
+            _return_value = get_assert_for_params(func_data, pack_param_strategy)
     if not func_data['return']:
         # if function with 'pass' or without return statement
         func_data['return'] = [{'args': {}, 'result': None}]
@@ -29,51 +29,58 @@ def return_assert_value(func_data):
         # get for each return statement param strategy and result
         # if err_message - we have error as result
         err_message = None
-        args = return_pack['args']
-        return_value = return_pack['result']
+        args = return_pack['args'] or pack_param_strategy
+        _return_value = return_pack['result']
         if isinstance(return_pack['result'], tuple):
-            return_value = []
-            args = {}
             # if we have tuple as result
+            pack_result = None
+            result_value = []
             for elem in return_pack['result']:
                 if 'BinOp' in elem:
-                    print('BinOp')
-
                     pack_param_strategy = generate_params_based_on_types(null_param,
                                                                          func_data['args'], func_data.get('ifs'),
                                                                          return_pack)
                     pack_result = get_assert_for_params(func_data, pack_param_strategy)
                     args.update(pack_result['args'])
-                    return_value.append(pack_result['result'])
+                    if 'error' in pack_result['result']:
+                        # if we have exception
+                        _return_value = pack_result['result']['error']
+                        err_message = pack_result['result']['comment']
+                        result_value.append(_return_value)
+                    else:
+                        result_value.append(pack_result['result'])
+                    break
                 else:
-                    return_value.append(elem)
-            return_value = tuple(return_value)
-        if 'BinOp' in return_pack:
+                    if not pack_result and isinstance(elem, dict) and 'args' in elem:
+                        result_value.append(pack_param_strategy[elem['args']])
+                    else:
+                        result_value.append(elem)
+            if len(result_value) == 1:
+                _return_value = result_value[0]
+            else:
+                _return_value = tuple(result_value)
+        elif 'BinOp' in return_pack:
             # 'args': bin_op_args or params, 'result': return_value
-            print('ifsss')
             if func_data.get('ifs', None):
                 pack_param_strategy = generate_params_based_on_types(
                     null_param, func_data['args'], func_data.get('ifs', None), return_pack)
                 pack_result = get_assert_for_params(func_data, pack_param_strategy)
+            else:
+                pack_result = get_assert_for_params(func_data, args)
             args = pack_result['args']
-            return_value = pack_result['result']
+            _return_value = pack_result['result']
         elif isinstance(return_pack['result'], dict):
             if 'error' in return_pack['result']:
                 # if we have exception
-                return_value = return_pack['result']['error']
+                _return_value = return_pack['result']['error']
                 err_message = return_pack['result']['comment']
             elif 'args' in return_pack:
                 print(return_pack)
-                return_value = args[return_pack['result']['args']]
-
-        elif not args:
-            args = pack_param_strategy
+                _return_value = args[return_pack['result']['args']]
         else:
-
             if isinstance(return_pack['result'], dict) and 'args' in return_pack['result']:
-
                 return_pack['result'] = args[return_pack['result']['args']]
-        yield args, return_value, err_message, return_pack.get('log', False)
+        yield args, _return_value, err_message, return_pack.get('log', False)
 
 
 def get_assert_for_params(func_data, params):
