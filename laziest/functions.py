@@ -99,6 +99,8 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
         if not args:
             function_header += '()'
         else:
+            print('args')
+            print(args)
             params_line = ', '.join([f'{key} = {value}' if not isinstance(
                 value, str) else f'{key} = \"{value}\"' for key, value in args.items()])
             function_header += f'({params_line})'
@@ -106,14 +108,21 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
             # mean we have an error raise
             if return_value not in globals()['__builtins__']:
                 imports.append(return_value)
-            asserts_definition_str = f"with pytest.raises({return_value}): \n{s.SP_4}{s.SP_4}# {comment} \n" \
-                               f"{s.SP_4}{s.SP_4}{function_header}"
+            asserts_definition_str = f"with pytest.raises({return_value}): \n{s.SP_4}{s.SP_4}" \
+                                     f"#  error message: {comment} \n" \
+                                     f"{s.SP_4}{s.SP_4}{function_header}"
         elif log_:
             log = True
             print('LOGG')
-            str_ = f"\'{eval(return_value, args)}\\n\'"
+            print(args)
+
+            def _get_str_value():
+                for arg, value in args.items():
+                    locals()[arg] = value
+                str_ = f"\'{eval(return_value)}\\n\'"
+                return str_
             asserts_definition_str = function_header + f"\n{s.SP_4}" + s.log_capsys_str + "\n" +  \
-                                     f"{s.SP_4}assert captured.out == {str_}\n"
+                                     f"{s.SP_4}assert captured.out == {_get_str_value()}\n"
         else:
             eq_line = " is " if return_value is None else f" == "
 
@@ -137,7 +146,6 @@ def test_creation(func_name: Text, func_data: Dict, async_type: bool = False,
     func_definition += "\n\n\n"
     if log:
         method_signature_with_capture = metod_signature.replace('()', '(capsys)')
-        print(method_signature_with_capture)
         func_definition = func_definition.replace(metod_signature, method_signature_with_capture)
     return func_definition, imports
 

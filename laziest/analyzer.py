@@ -8,6 +8,7 @@ from typing import Any, Text, Dict
 from pprint import pprint
 from collections import defaultdict, OrderedDict
 from laziest import ast_meta as meta
+from laziest.params import generate_value_in_borders
 from random import randint
 
 pytest_needed = False
@@ -148,8 +149,6 @@ class Analyzer(ast.NodeVisitor):
                     global_vars.update(binop_args)
 
             return_value = self.get_bin_op_value(code_line, variables, variables_names, global_vars)
-            print('bin op ')
-            print(return_value)
         except UnboundLocalError:
             return_value = {'BinOp': code_line, 'binop_args': binop_args}
         return return_value
@@ -158,11 +157,8 @@ class Analyzer(ast.NodeVisitor):
         if previous_statements is None:
             previous_statements = []
         # we get variables from statement
-        print(statement.__dict__)
         value = self.get_value(statement.test, variables_names, variables)
         # we work with args from statements
-        print('inifvalue')
-        print(value)
         args = {}
         previous_statements.append(value)
         if value['ops'] == '==':
@@ -174,58 +170,34 @@ class Analyzer(ast.NodeVisitor):
         if 'print' in result:
             result = result['print']['text'].replace('    ', '')
         func_data['return'].append({'args': args, 'result': result})
-        print(index)
         func_data['return'][index]['log'] = True
         for orelse in statement.orelse:
-            print(orelse.__dict__)
-            print(type(orelse))
-            print('orrrr')
             if isinstance(orelse, _ast.If):
                 func_data = self.process_if_construction(
                     orelse, func_data, variables_names, variables, previous_statements)
             elif isinstance(orelse, ast.Return):
-                func_data['return'].append(self.generate_result_based_on_previous_conditions(
-                    orelse.value, variables_names, variables, previous_statements))
-
-        print(func_data)
+                func_data['return'].append(self.generate_arg_based_on_previous_conditions(orelse.value, previous_statements))
+        func_data['ifs'] = previous_statements
         return func_data
 
-    def generate_result_based_on_previous_conditions(
-            self, return_node, variables_names, variables, previous_statements):
+    def generate_arg_based_on_previous_conditions(self, return_node, previous_statements):
         return_value = self.get_value(return_node)
         print(return_value)
+        print('generate_result_based_on_previous_conditions')
         if 'args' in return_value:
-            args_statements = []
-            wrong_values = []
-            default_value = 1000
-            left_border = -default_value
-            right_border = default_value
-            for statement in previous_statements:
-                if statement['left']['args'] == return_value['args']:
-                    if statement['ops'] == '==':
-                        wrong_values.append(statement['comparators'])
-                    elif statement['ops'] == '>':
-                        right_border = statement['comparators'] - 1
-                    elif statement['ops'] == '<':
-                        left_border = statement['comparators'] + 1
-            if left_border != (-default_value) or right_border != default_value:
-                # we have int
-                generate_value = [randint(left_border, right_border) for _ in range(0, 3)]
-                for val in generate_value:
-                    for wr_val in wrong_values:
-                        if val != wr_val:
-                            return_value['result'] = val
-        return {'args': {return_value['args']: val}, 'result': return_value['result']}
+            _value = generate_value_in_borders(previous_statements, {return_value['args']: None})
+            print(_value)
+            return {'args': _value, 'result': return_value}
 
     def visit_FunctionDef(self, node, class_=None):
         """ main methods to """
         print(self.tree)
-        func_date = {'args': self.get_function_args(node),
+        func_data = {'args': self.get_function_args(node),
                      'kargs_def': node.args.kw_defaults,
                      'kargs': node.args.kwarg,
                      'return': []}
 
-        self.func_data = func_date
+        self.func_data = func_data
         # local variables, assign statements in function body
         variables = [node for node in node.body if isinstance(node, ast.Assign)]
         variables_names = {}
@@ -243,7 +215,7 @@ class Analyzer(ast.NodeVisitor):
         for body_item in non_variables_nodes_bodies:
             if isinstance(body_item, ast.Return):
                 return_ = {'args': {}, 'result': self.get_value(body_item.value, variables_names, variables)}
-                func_date['return'].append(return_)
+                func_data['return'].append(return_)
                 print('return___')
                 print(return_)
             if isinstance(body_item, _ast.If):
@@ -252,18 +224,22 @@ class Analyzer(ast.NodeVisitor):
                 print(node.body[0])
 
                 print(node.body[0])
-                func_date = self.process_if_construction(body_item,
+                func_data = self.process_if_construction(body_item,
                                                               self.func_data, variables_names, variables)
                 print('FUNC')
-                print(func_date)
+                print(func_data)
             print('BODY')
             print(body_item)
 
             print(body_item.__dict__)
-        print(func_date['return'])
+        print(func_data['return'])
         if not class_:
-            self.tree['def'][node.name] = deepcopy(func_date)
-        return func_date
+            self.tree['def'][node.name] = deepcopy(func_data)
+
+        if not func_data['return']:
+            # if function does not return anything
+            func_data['return'] = [{'args': (), 'result': None}]
+        return func_data
 
     def visit_If(self, node):
         raise Exception(node.__dict__)
