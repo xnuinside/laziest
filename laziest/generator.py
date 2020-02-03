@@ -23,7 +23,6 @@ def generate_tests(tree: Dict):
         method_types = ['self', 'class', 'static']
         for type_ in method_types:
             for method in class_['def'].get(type_, []):
-
                 if method != '__init__':
                     test_case += f.test_creation(method, class_['def'][type_][method],
                                                  class_=class_, class_method_type=type_)
