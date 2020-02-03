@@ -305,6 +305,12 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.FormattedValue):
             print(node.value.__dict__)
             return self.get_value(node.value)
+        elif isinstance(node, _ast.UnaryOp):
+            _op_map = {
+                _ast.USub: '-',
+                _ast.Invert: '~'
+            }
+            return eval(f'{_op_map[node.op.__class__]}{self.get_value(node.operand)}')
         else:
             print("new type",
                   node,

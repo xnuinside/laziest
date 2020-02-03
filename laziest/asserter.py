@@ -36,7 +36,7 @@ def return_assert_value(func_data):
             pack_result = None
             result_value = []
             for elem in return_pack['result']:
-                if 'BinOp' in elem:
+                if getattr(elem, '__iter__', None) and 'BinOp' in elem:
                     pack_param_strategy = generate_params_based_on_types(null_param,
                                                                          func_data['args'], func_data.get('ifs'),
                                                                          return_pack)
