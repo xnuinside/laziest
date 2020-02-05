@@ -3,6 +3,8 @@ import tabnanny
 import subprocess
 from ast import parse
 from typing import Text
+from datetime import datetime
+import multiprocessing as mp
 from laziest.analyzer import Analyzer
 from laziest.strings import test_method_prefix
 from laziest.generator import generate_test_file_content
@@ -19,14 +21,6 @@ def dump_to_file(path: Text, tf_content: Text) -> Text:
     with open(test_file_path, 'w+') as test_file:
         test_file.write(tf_content)
     return test_file_path
-
-import multiprocessing as mp
-from multiprocessing import Queue
-from datetime import datetime
-
-start_time = datetime.now()
-
-q = Queue()
 
 
 def run_laziest(args: dict):
