@@ -3,7 +3,6 @@ import tabnanny
 import subprocess
 from ast import parse
 from typing import Text
-from datetime import datetime
 import multiprocessing as mp
 from laziest.analyzer import Analyzer
 from laziest.strings import test_method_prefix
