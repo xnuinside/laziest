@@ -75,14 +75,9 @@ class Analyzer(ast.NodeVisitor):
             var_name = name_er.args[0].split('\'')[1]
             if name_er in self.func_data['args']:
                 # if name is a function's parameter
-
-                print(self.func_data['args'])
-                print('args')
                 return_value = {'BinOp': code_line, 'global_vars': binop_vars}
             elif var_name in variables_names:
                 # if name in variables (assignment statements)
-                print(var_name)
-                print('var_name')
                 variable = variables[variables_names[var_name]]
                 if isinstance(variable.value, _ast.Dict):
                     # add to globals
