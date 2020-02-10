@@ -41,7 +41,7 @@ def class_methods_names_create(func_name, class_, class_method_type):
                           if a not in reserved_words}
             filtered_args = {x: init_args[x] for x in init_args
                              if x not in reserved_words}
-            params = generate_params_based_on_types(null_param, filtered_args)
+            params = generate_params_based_on_types(null_param, class_)
             params_line = ', '.join([f'{key}={value}' for key, value in params.items()])
             instance_ = f'{snake_case_var}  = {class_["name"]}({params_line})'
         func_name = f'{snake_case_var}.{func_name}'
@@ -76,8 +76,6 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
     :param class_method_type:
     :return:
     """
-    print(func_data)
-    # raise
     instance_ = None
 
     if class_:
@@ -87,24 +85,27 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
     else:
         function_header_init = instance_ + "\n" + s.SP_4 + s.assert_string
 
-    asserts_definition = []
+    asserts_definition = set()
     imports = []
     log = False
-
-    for args, return_value, err_message, log_ in return_assert_value(func_data):
-
+    returns_ = return_assert_value(func_data)
+    for args, return_value, err_message, log_, random_values in returns_:
+        print('return_value')
+        print(return_value)
+        await_prefix = '( await ' if func_data['async_f'] else ''
         # form text functions bodies based on args, return_values and comments
         if log_:
-            print("LOOOG")
-            function_header = f'{func_name}'
+            function_header = await_prefix + f'{func_name}'
         else:
-            function_header = function_header_init + f' {func_name}'
+            function_header = function_header_init + ' ' + await_prefix + f'{func_name}'
         if not args:
             function_header += '()'
         else:
-            params_line = ', '.join([f'{key} = {value}' if not isinstance(
-                value, str) else f'{key} = \"{value}\"' for key, value in args.items()])
+            params_line = ', '.join([f'{key}={value}' if not isinstance(
+                value, str) else f'{key}=\"{value}\"' for key, value in args.items()])
             function_header += f'({params_line})'
+            if await_prefix:
+                function_header += ')'
         if err_message:
             # mean we have an error raise
             if return_value not in globals()['__builtins__']:
@@ -115,6 +116,7 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
                                      f"{s.SP_4}{s.SP_4}{function_header}"
         elif log_:
             log = True
+
             def _get_str_value():
                 for arg, value in args.items():
                     locals()[arg] = value
@@ -122,24 +124,38 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
                 return str_
             asserts_definition_str = function_header + f"\n{s.SP_4}" + s.log_capsys_str + "\n" + \
                                      f"{s.SP_4}assert captured.out == {_get_str_value()}\n"
+        elif random_values:
+            # this mean we have dict, but some result can be generated randomly in runtime
+            # we create several asserts per key without random and assert is not None to random key
+            for key in return_value:
+                print(return_value[key])
+                value = str(return_value[key]) if not isinstance(return_value[key], str) else f'\'{return_value[key]}\''
+                if key not in random_values:
+                    asserts_definition_str = function_header + f'[\'{key}\']' + " == " \
+                                             + value + f"\n{s.SP_4}"
+                else:
+                    asserts_definition_str = function_header + f'[\'{key}\']' + " is not None "
+                asserts_definition.add(asserts_definition_str)
         else:
             eq_line = " is " if return_value is None else f" == "
 
             return_value = str(return_value) if not isinstance(return_value, str) else f"\'{return_value}\'"
             asserts_definition_str = function_header + f"{eq_line}" + return_value + f"\n{s.SP_4}"
-        asserts_definition.append(asserts_definition_str)
+        asserts_definition.add(asserts_definition_str)
+    print('asserts_definition')
+    print(asserts_definition)
     for assert_ in asserts_definition:
         func_definition += f"\n{s.SP_4}" + assert_
     return func_definition, log, imports
 
 
-def test_creation(func_name: Text, func_data: Dict, async_type: bool = False,
+def test_creation(func_name: Text, func_data: Dict,
                   class_=None, class_method_type=None) -> Text:
     """ method to generate test body """
     if class_:
-        func_definition = get_method_signature(func_name, async_type, class_['name'])
+        func_definition = get_method_signature(func_name, func_data['async_f'], class_['name'])
     else:
-        metod_signature = get_method_signature(func_name, async_type)
+        metod_signature = get_method_signature(func_name, func_data['async_f'])
         func_definition = metod_signature
     func_definition, log, imports = test_body_resolver(func_definition, func_name, func_data, class_, class_method_type)
     func_definition += "\n\n\n"

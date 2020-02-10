@@ -2,7 +2,7 @@ import os
 from typing import List, Union
 from glob import glob
 
-from laziest.utils import logger
+from laziest.conf.config import logger
 
 INIT_FILE = '__init__.py'
 

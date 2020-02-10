@@ -27,11 +27,13 @@
         use_ignore_file = .dockerignore, .gitignore
 """
 import os
+import logging
 from configparser import ConfigParser
 from collections import OrderedDict
 from typing import Dict, Union
 from copy import deepcopy
-from laziest.utils import logger
+
+logger = logging.getLogger('laziest')
 
 section_name = 'laziest'
 default_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'default_conf.cfg')
