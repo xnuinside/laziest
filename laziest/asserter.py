@@ -30,7 +30,7 @@ def return_assert_value(func_data):
         # get for each return statement param strategy and result
         # if err_message - we have error as result
         err_message = None
-        args = return_pack['args'] or pack_param_strategy
+        args = return_pack.get('args') or pack_param_strategy
         _return_value = return_pack['result']
         if isinstance(return_pack['result'], tuple):
             # if we have tuple as result

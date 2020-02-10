@@ -55,8 +55,8 @@ def generate_bunch_of_test_files(python_paths):
     for job in list(jobs):
         job.get()
 
-    # clean up
     pool.close()
+    pool.join()
 
 
 def tests_generator_per_file(python_file):
@@ -88,3 +88,4 @@ def tests_generator_per_file(python_file):
     proc = subprocess.Popen(f'black -l {79} {test_file_path}', shell=True)
     proc.wait()
     proc.kill()
+    exit(0)

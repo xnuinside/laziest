@@ -20,7 +20,7 @@ def one_condition_custom_exception(arg1):
     else:
         return arg1
 
-
+laz
 def one_condition_custom_exception_and_return_binary_op(arg1, arg2=123, arg3=123):
     if arg1 == '1':
         raise CustomException('we hate 1')

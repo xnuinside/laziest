@@ -1,7 +1,6 @@
 """ result of analyzers work - data from ast that needed to asserter """
 import ast
 import _ast
-import re
 
 from copy import deepcopy
 from typing import Any, Text, Dict
@@ -129,7 +128,7 @@ class Analyzer(ast.NodeVisitor):
         non_variables_nodes_bodies = [node for node in node.body if node not in variables]
         for body_item in non_variables_nodes_bodies:
             if isinstance(body_item, ast.Return):
-                return_ = {'args': {}, 'result': self.get_value(body_item.value, variables_names, variables)}
+                return_ = {'result': self.get_value(body_item.value, variables_names, variables)}
                 func_data['return'].append(return_)
             if isinstance(body_item, _ast.If):
                 func_data = self.process_if_construction(
@@ -149,13 +148,16 @@ class Analyzer(ast.NodeVisitor):
         self.tree['raises'].append(node.exc.__dict__)
 
     def set_slices_to_func_args(self, arg, _slice):
+
         self.func_data['args'][arg]['type'] = dict if isinstance(_slice, str) else list
         self.func_data['keys'][_slice][arg] = {'type': None}
 
     def set_type_to_func_args(self, arg, _type):
+        print(arg)
+        print('arg')
         if isinstance(arg, dict):
             self.func_data['keys'][arg['slice']][arg['arg']]['type'] = _type
-        else:
+        elif arg in self.func_data['args']:
             self.func_data['args'][arg]['type'] = _type
 
     def process_ast_name(self, node, variables_names, variables):
@@ -185,7 +187,8 @@ class Analyzer(ast.NodeVisitor):
             print(node.id)
             raise Exception(node.id)
 
-    def extract_args_in_bin_op(self, item, args):
+    @staticmethod
+    def extract_args_in_bin_op(item, args):
         if isinstance(item, dict) and 'arg' in item:
             if 'args' in item['arg']:
                 # mean this is a function arg, need to set type
@@ -196,8 +199,6 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(item, dict) and 'args' in item:
             args.append(item['args'])
         else:
-            print(item)
-            print('item')
             args.append(item)
         return args
 
@@ -235,15 +236,22 @@ class Analyzer(ast.NodeVisitor):
             bin_op_left = self.get_value(node.left, variables_names, variables)
             bin_op_right = self.get_value(node.right, variables_names, variables)
             args = []
+            _simple = [int, float]
+            if type(bin_op_left) in _simple and type(bin_op_right) in _simple :
+                return eval(f'{bin_op_left}{meta.operators[node.op.__class__]}{bin_op_right}')
             math_type = True
-            for item in [bin_op_right, bin_op_left]:
-                self.extract_args_in_bin_op(item, args)
-            if args and math_type:
-                for arg in args:
-                    # TODO: maybe make sense to add int also
-                    if type(arg) not in meta.simple:
+            print('bin_op_left')
+            print(bin_op_left)
+            print(bin_op_right)
+            if (isinstance(bin_op_left, dict) and 'BinOp' not in bin_op_left) \
+                    and (isinstance(bin_op_right, dict) and 'BinOp' not in bin_op_right) or (
+                    not (isinstance(bin_op_left, dict) or not (isinstance(bin_op_right, dict)))):
+                for item in [bin_op_right, bin_op_left]:
+                    args = self.extract_args_in_bin_op(item, args)
+                if args and math_type:
+                    for arg in args:
+                        # TODO: maybe make sense to add int also
                         self.set_type_to_func_args(arg, float)
-
 
             return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
         elif isinstance(node, _ast.Subscript):

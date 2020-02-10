@@ -19,7 +19,15 @@ operators = {
     _ast.Add: '+',
     _ast.Sub: '-',
     _ast.UAdd: '+=',
-    _ast.USub: '-='
+    _ast.USub: '-=',
+    _ast.Pow: '**',
+    _ast.Mod: '%',
+    _ast.FloorDiv: '//',
+    _ast.LShift: '<<',
+    _ast.RShift: '>>',
+    _ast.BitOr: '|',
+    _ast.BitAnd: '&',
+    _ast.BitXor: '^'
     }
 
 values_for_ast_type = {

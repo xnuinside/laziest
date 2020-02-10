@@ -5,14 +5,15 @@ from random import random, randint
 
 def map_types(_type, slices=None):
     if _type == Text or _type == str:
-        return str_generator
+        return str_generator()
     elif _type == dict or _type == Dict:
         return dict_generator(slices)
     elif _type == float:
-        return float_generator
+        return float_generator()
     elif _type == int:
-        return int_generator
+        return int_generator()
     else:
+        print(_type)
         return 'need_to_define_generator'
 
 
@@ -33,7 +34,8 @@ def dict_generator(keys=None):
     if keys:
         print(keys)
         for key in keys:
-            _dict.update({key: map_types(keys[key]['type'])()})
+            print(keys)
+            _dict.update({key: map_types(keys[key]['type'])})
     return _dict
 
 
