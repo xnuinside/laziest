@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, List, Text
+from typing import Dict
 from random import randint
 # TODO: temporary, after need to integrate with hypothesis or smth else to generate valuse
 from laziest.random_generators import map_types
@@ -55,8 +55,6 @@ def generate_value_in_borders(previous_statements, func_data, null_param={}):
     """
     final_args = {}
     for arg in func_data['args']:
-        # for each arg check if statements to create value without limits
-        args_statements = []
         wrong_values = []
         default_value = 1000
         left_border = -default_value

@@ -118,8 +118,8 @@ def return_assert_value(func_data):
                             right = value['right']
                         print(args)
                         try:
-                            return_pack['result'][key] = eval(f'{left}'
-                                                              f'{operators[value["op"].__class__]}{right}', deepcopy(args))
+                            return_pack['result'][key] = eval(
+                                f'{left}{operators[value["op"].__class__]}{right}', deepcopy(args))
                         except KeyError as e:
                             return_pack['result'] = {'error': e.__class__.__name__, 'comment': e}
 

@@ -1,5 +1,5 @@
+""" Tests body generator """
 import os
-from collections import defaultdict
 from typing import Dict, Text
 
 import laziest.strings as s
@@ -19,7 +19,6 @@ def generate_tests(tree: Dict):
         if not class_['def']:
             print("Empty class")
             continue
-        print(class_)
         method_types = ['self', 'class', 'static']
         for type_ in method_types:
             for method in class_['def'].get(type_, []):
@@ -27,19 +26,17 @@ def generate_tests(tree: Dict):
                     test_case += f.test_creation(method, class_['def'][type_][method],
                                                  class_=class_, class_method_type=type_)
         imports.append(class_['name'])
-    for funct_name in tree['def']:
+    for func_name in tree['def']:
         # define test for sync function
-        print(funct_name)
-        unit_test, funct_imports = f.test_creation(funct_name, tree['def'][funct_name])
+        unit_test, funct_imports = f.test_creation(func_name, tree['def'][func_name])
         for import_ in funct_imports:
             imports.append(import_)
         test_case += unit_test
-        imports.append(funct_name)
+        imports.append(func_name)
     for async_funct_name in tree['async']:
         # define test for async function
         test_case += f.test_creation(async_funct_name,
-                                     tree['async'][async_funct_name],
-                                     async_type=True)
+                                     tree['async'][async_funct_name])
     return a.pytest_needed, test_case, imports
 
 
@@ -76,5 +73,5 @@ def combine_file(result: tuple, path: Text, async_in: bool) -> Text:
         file_output = s.async_io_aware_text + file_output
     file_output += "\n\n"
     file_output += result[1]
-    file_output = "import pytest\n" + file_output #if result[0] else file_output
+    file_output = "import pytest\n" + file_output
     return file_output

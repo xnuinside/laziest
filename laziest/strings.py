@@ -15,6 +15,6 @@ class_signature = "class Test{cls_name}:{SP_4}\n"
 log_capsys_str = 'captured = capsys.readouterr()'
 
 assert_string = "assert"
-# infos
+
 async_io_aware_text = "# Need to install pytest-asyncio package " \
                       "to get possible run tests for async method\n\n"

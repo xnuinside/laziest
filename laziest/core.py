@@ -13,10 +13,12 @@ from laziest.walker import PathWalker, FilteredPaths
 
 tabnanny.verbose = True
 
+q = mp.Queue()
 
-def dump_to_file(path: Text, tf_content: Text) -> Text:
+
+def dump_to_file(path: Text, tf_content: Text, tests_dir: Text) -> Text:
     test_file_name = f'test_{os.path.basename(path)}'
-    test_file_path = os.path.join(os.path.dirname(path), test_file_name)
+    test_file_path = os.path.join(tests_dir, test_file_name)
     with open(test_file_path, 'w+') as test_file:
         test_file.write(tf_content)
     return test_file_path
@@ -36,9 +38,9 @@ def run_laziest(args: dict):
     paths = [x for x in pw.python_files if '__init__' not in x]
 
     # if not config_args.get('overwrite', False):
-        # append = True
-        # run differ, to collect existed file names and methods
-        # pass
+    # append = True
+    # run differ, to collect existed file names and methods
+    # pass
     generate_bunch_of_test_files(paths)
     exit(0)
 
@@ -54,6 +56,10 @@ def generate_bunch_of_test_files(python_paths):
     # wait for all jobs to finish
     for job in list(jobs):
         job.get()
+    while not q.empty():
+        proc = subprocess.Popen(f'black -l {79} {q.get()}', shell=True)
+        proc.wait()
+        proc.kill()
 
     pool.close()
     pool.join()
@@ -84,8 +90,13 @@ def tests_generator_per_file(python_file):
         # append new tests to tf
         # if new method in test case for class - insert
         pass
-    test_file_path = dump_to_file(python_file, tf_content)
-    proc = subprocess.Popen(f'black -l {79} {test_file_path}', shell=True)
-    proc.wait()
-    proc.kill()
-    exit(0)
+
+    # TODO: need to change on getting prefix from command line and config
+    prefix = 'tests'
+    if prefix in python_file:
+        tests_dir = os.path.join(python_file.split(prefix)[0], prefix)
+    else:
+        tests_dir = os.path.join(os.path.dirname(os.path.dirname(python_file)), 'tests')
+    os.makedirs(tests_dir, exist_ok=True)
+    test_file_path = dump_to_file(python_file, tf_content, tests_dir)
+    q.put(test_file_path)

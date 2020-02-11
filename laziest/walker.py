@@ -1,8 +1,7 @@
 import os
-from typing import List, Union
+from typing import List
 from glob import glob
 
-from laziest.conf.config import logger
 
 INIT_FILE = '__init__.py'
 
@@ -14,7 +13,6 @@ class FilteredPaths:
     def __init__(self, ignore_files=None, ignore_paths=None, ignore_names=None):
 
         self.ignore_files = ignore_files or []
-        print(self.ignore_files)
         self.ignore_paths = ignore_paths or []
         self.ignore_names = ignore_names or []
         if self.ignore_files:
@@ -39,7 +37,7 @@ class PathWalker(object):
     """
     def __init__(self, path: str,
                  fp: FilteredPaths,
-                 recursive: bool =False) -> None:
+                 recursive: bool = False) -> None:
         # TODO: add ignore files, subdirs
         self.path = os.path.abspath(path)
         self.fp = fp

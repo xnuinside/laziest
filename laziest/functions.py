@@ -1,7 +1,7 @@
-from typing import Dict, Text
+from typing import Dict, Text, Tuple
 from laziest import strings as s
 import re
-from laziest.params import generate_params_based_on_types
+# from laziest.params import generate_params_based_on_types
 from laziest.asserter import return_assert_value
 
 reserved_words = ['self', 'cls']
@@ -36,14 +36,12 @@ def class_methods_names_create(func_name, class_, class_method_type):
         func_name = f'{class_["name"]}.{func_name}'
     else:
         if '__init__' in class_['def'].get('self'):
-            init_args = class_['def']['self']['__init__']['args']
-            null_param = {a: None for a in class_['def']['self']['__init__']['args']
-                          if a not in reserved_words}
-            filtered_args = {x: init_args[x] for x in init_args
-                             if x not in reserved_words}
-            params = generate_params_based_on_types(null_param, class_)
-            params_line = ', '.join([f'{key}={value}' for key, value in params.items()])
-            instance_ = f'{snake_case_var}  = {class_["name"]}({params_line})'
+            # init_args = class_['def']['self']['__init__']['args']
+            # null_param = {a: None for a in class_['def']['self']['__init__']['args']
+            # if a not in reserved_words}
+            # params = generate_params_based_on_types(null_param, class_)
+            # params_line = ', '.join([f'{key}={value}' for key, value in params.items()])
+            ...
         func_name = f'{snake_case_var}.{func_name}'
     return func_name
 
@@ -122,8 +120,9 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
                     locals()[arg] = value
                 str_ = f"\'{eval(return_value)}\\n\'"
                 return str_
-            asserts_definition_str = function_header + f"\n{s.SP_4}" + s.log_capsys_str + "\n" + \
-                                     f"{s.SP_4}assert captured.out == {_get_str_value()}\n"
+            asserts_definition_str = function_header + f"\n{s.SP_4}" \
+                                                       f"" + s.log_capsys_str + f"\n{s.SP_4}assert captured.out " \
+                                                                                f"== {_get_str_value()}\n"
         elif random_values:
             # this mean we have dict, but some result can be generated randomly in runtime
             # we create several asserts per key without random and assert is not None to random key
@@ -150,7 +149,7 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
 
 
 def test_creation(func_name: Text, func_data: Dict,
-                  class_=None, class_method_type=None) -> Text:
+                  class_=None, class_method_type=None) -> Tuple[Text, Text]:
     """ method to generate test body """
     if class_:
         func_definition = get_method_signature(func_name, func_data['async_f'], class_['name'])
@@ -163,5 +162,3 @@ def test_creation(func_name: Text, func_data: Dict,
         method_signature_with_capture = metod_signature.replace('()', '(capsys)')
         func_definition = func_definition.replace(metod_signature, method_signature_with_capture)
     return func_definition, imports
-
-

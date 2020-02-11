@@ -46,7 +46,6 @@ class Analyzer(ast.NodeVisitor):
             self.tree["from"].append(alias.name)
         self.generic_visit(node)
 
-
     def process_if_construction(self, statement, func_data, variables_names, variables, previous_statements=None):
         if previous_statements is None:
             previous_statements = []
@@ -227,8 +226,8 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.Assign):
             return self.get_value(node.value, variables_names, variables)
         elif isinstance(node, _ast.Dict):
-            return {self.get_value(key, variables_names, variables):
-                        self.get_value(node.values[num], variables_names, variables)
+            return {self.get_value(key, variables_names, variables): self.get_value(
+                node.values[num], variables_names, variables)
                     for num, key in enumerate(node.keys)}
         elif isinstance(node, _ast.Raise):
             return {'error': node.exc.func.id, 'comment': self.get_value(node.exc.args[0])}
@@ -237,7 +236,7 @@ class Analyzer(ast.NodeVisitor):
             bin_op_right = self.get_value(node.right, variables_names, variables)
             args = []
             _simple = [int, float]
-            if type(bin_op_left) in _simple and type(bin_op_right) in _simple :
+            if type(bin_op_left) in _simple and type(bin_op_right) in _simple:
                 return eval(f'{bin_op_left}{meta.operators[node.op.__class__]}{bin_op_right}')
             math_type = True
             print('bin_op_left')
@@ -251,9 +250,15 @@ class Analyzer(ast.NodeVisitor):
                 if args and math_type:
                     for arg in args:
                         # TODO: maybe make sense to add int also
-                        self.set_type_to_func_args(arg, float)
-
+                        if isinstance(node.op, _ast.Mult) and isinstance(
+                                bin_op_left, str) or isinstance(bin_op_right, str):
+                            # if at least one operand is string - we can multiply only with int
+                            self.set_type_to_func_args(arg, int)
+                        else:
+                            # mean both of them - function args
+                            self.set_type_to_func_args(arg, float)
             return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
+
         elif isinstance(node, _ast.Subscript):
             arg = self.get_value(node.value,  variables_names, variables)
             slice = self.get_value(node.slice,  variables_names, variables)
