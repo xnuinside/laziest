@@ -11,16 +11,28 @@ Installation:
 Usage:
 *************
 
-    laziest /path/to/python/code/files
+    lazy /path/to/python/code/files
+
 
 For example:
 
-    laziest /home/youruser/laziest/tests/functional/primitive_code.py
+    lazy /home/yourUser/laziest/tests/code_sample/done/conditions.py
+
 
 It will generate test file in directory:
 
-    /home/youruser/laziest/tests/functional/test_primitive_code.py
+    /home/yourUser/laziest/tests/test_conditions.py
+
 
 Run tests with 'pytest' to check that they are valid:
 
-    pytest /home/youruser/laziest/tests/functional/test_primitive_code.py
+    pytest /home/yourUser/laziest/tests/functional/test_primitive_code.py
+
+
+You can run laziest tests with tox and check output.
+
+
+Docs:
+*****
+
+Coming soon.
