@@ -46,6 +46,18 @@ class Analyzer(ast.NodeVisitor):
             self.tree["from"].append(alias.name)
         self.generic_visit(node)
 
+    def get_operand_value(self, value):
+        """ arg can be single like int, str and etc or it can be slice like dict, list, tuple and etc.
+            sample with slice {'arg': {'args': 'arg1'}, 'slice': 3}
+        """
+        if isinstance(value, dict):
+            if 'slice' in value:
+                value = f'{value["arg"]["args"]}[\'{value["slice"]}\']' if isinstance(
+                    value['slice'], str) else f'{value["arg"]["args"]}[{value["slice"]}]'
+            elif 'args' in value:
+                value = value['args']
+        return value
+
     def process_if_construction(self, statement, func_data, variables_names, variables, previous_statements=None):
         if previous_statements is None:
             previous_statements = []
@@ -54,15 +66,18 @@ class Analyzer(ast.NodeVisitor):
         # we work with args from statements
         args = {}
         previous_statements.append(value)
+        _value = self.get_operand_value(value['left'])
+        print("_VAL")
+        print(_value)
+        print(value)
         if value['ops'] == '==':
-            args = {value['left']['args']: value['comparators']}
+            args = {_value: value['comparators']}
         elif value['ops'] == '>':
-            args = {value['left']['args']: value['comparators'] + randint(1, 100)}
+            self.set_type_to_func_args(value['left'], type(value['comparators']))
+            args = {_value: value['comparators'] + randint(1, 100)}
         result = self.get_value(statement.body[0])
         index = len(func_data['return'])
-        print(statement.body[0].__dict__)
         if 'print' in result:
-            print(result)
             result = result['print']['text'].replace('    ', '')
         func_data['return'].append({'args': args, 'result': result})
         func_data['return'][index]['log'] = True
@@ -78,8 +93,6 @@ class Analyzer(ast.NodeVisitor):
 
     def generate_arg_based_on_previous_conditions(self, return_node, func_data, previous_statements):
         return_value = self.get_value(return_node)
-        print(return_value)
-        print('generate_result_based_on_previous_conditions')
         if 'args' in return_value:
             _value = generate_value_in_borders(previous_statements, func_data, {return_value['args']: None})
             print(_value)
@@ -152,10 +165,11 @@ class Analyzer(ast.NodeVisitor):
         self.func_data['keys'][_slice][arg] = {'type': None}
 
     def set_type_to_func_args(self, arg, _type):
-        print(arg)
-        print('arg')
         if isinstance(arg, dict):
-            self.func_data['keys'][arg['slice']][arg['arg']]['type'] = _type
+            arg_name = arg['arg']
+            if isinstance(arg_name, dict) and 'args' in arg_name:
+                arg_name = arg_name['args']
+            self.func_data['keys'][arg['slice']][arg_name]['type'] = _type
         elif arg in self.func_data['args']:
             self.func_data['args'][arg]['type'] = _type
 
@@ -199,6 +213,7 @@ class Analyzer(ast.NodeVisitor):
             args.append(item['args'])
         else:
             args.append(item)
+
         return args
 
     def get_value(self, node: Any, variables_names: Dict = None, variables: Dict = None) -> Any:
@@ -237,11 +252,9 @@ class Analyzer(ast.NodeVisitor):
             args = []
             _simple = [int, float]
             if type(bin_op_left) in _simple and type(bin_op_right) in _simple:
+                # count result of bin op
                 return eval(f'{bin_op_left}{meta.operators[node.op.__class__]}{bin_op_right}')
             math_type = True
-            print('bin_op_left')
-            print(bin_op_left)
-            print(bin_op_right)
             if (isinstance(bin_op_left, dict) and 'BinOp' not in bin_op_left) \
                     and (isinstance(bin_op_right, dict) and 'BinOp' not in bin_op_right) or (
                     not (isinstance(bin_op_left, dict) or not (isinstance(bin_op_right, dict)))):
@@ -257,6 +270,9 @@ class Analyzer(ast.NodeVisitor):
                         else:
                             # mean both of them - function args
                             self.set_type_to_func_args(arg, float)
+            else:
+                if isinstance(bin_op_right, dict) and 'BinOp' not in bin_op_right and 'BinOp'  in bin_op_left:
+                    self.set_type_to_func_args(bin_op_right, int)
             return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
 
         elif isinstance(node, _ast.Subscript):

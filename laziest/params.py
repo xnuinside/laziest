@@ -46,22 +46,32 @@ def gen_params(args, keys, null_param):
     return params
 
 
-def generate_value_in_borders(previous_statements, func_data, null_param={}):
+def generate_value_in_borders(previous_statements, func_data, null_param=None):
     """
         generate values if exist previous borders (statemnts) from 'ifs'
     :param previous_statements:
-    :param args:
+    :param func_data:
+    :param null_param:
     :return:
     """
+
     final_args = {}
+    if not null_param:
+        null_param = None
     for arg in func_data['args']:
         wrong_values = []
         default_value = 1000
         left_border = -default_value
         right_border = default_value
-
+        _slice = None
         for statement in previous_statements:
-            if statement['left']['args'] == arg:
+            print(statement)
+            if 'arg' in statement['left']:
+                args = statement['left']['arg']['args']
+                _slice = statement['left']['slice']
+            else:
+                args = statement['left']['args']
+            if args == arg:
                 if statement['ops'] == '==':
                     wrong_values.append(statement['comparators'])
                 elif statement['ops'] == '>':
@@ -75,10 +85,18 @@ def generate_value_in_borders(previous_statements, func_data, null_param={}):
             for val in generate_values:
                 for wr_val in wrong_values:
                     if val != wr_val:
-                        final_args[arg] = val
+                        if not _slice:
+                            final_args[arg] = val
+                        else:
+                            _type = dict if isinstance(_slice, str) else list
+                            _arg = map_types(_type=_type, slices=_slice)
+                            _arg[_slice] = val
+                            final_args[arg] = _arg
     if final_args.keys() != func_data['args'].keys():
         args_with_none = {arg: func_data['args'][arg] for arg in func_data['args'] if arg not in final_args}
         params = gen_params(args_with_none, func_data['keys'],
                             {param: null_param[param] for param in null_param if param in args_with_none})
         final_args.update(params)
+    print('final_args')
+    print(final_args)
     return final_args

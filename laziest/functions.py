@@ -114,7 +114,7 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
                                      f"{s.SP_4}{s.SP_4}{function_header}"
         elif log_:
             log = True
-
+            print(args)
             def _get_str_value():
                 for arg, value in args.items():
                     locals()[arg] = value

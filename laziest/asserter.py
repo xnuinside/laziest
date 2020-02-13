@@ -1,12 +1,33 @@
+
+from copy import deepcopy
+from typing import Tuple, Union, Any, Dict, List
 from laziest.params import generate_params_based_on_types
 from laziest import analyzer
-from copy import deepcopy
 from laziest.ast_meta import operators
 
 normal_types = [int, str, list, dict, tuple, set, bytearray, bytes]
 
 
-def return_assert_value(func_data):
+def get_sliced_value(value: Union[Dict, Any]) -> Any:
+    """
+
+    :param value: can be dict, dict with 'args' key - mean this is {'arg': {'args': 'product_quantity'}, 'slice': 1}
+            or {'arg': 'product_quantity', 'slice': 1} or 'product_quantity'
+    :return:
+    """
+    if isinstance(value, dict) and 'arg' in value:
+        if 'args' in value['arg']:
+            args = value['arg']['args']
+        else:
+            args = value['arg']
+        value = f"{args}[\'{value['slice']}\']" if isinstance(value['slice'], str) \
+            else f"{args}[{value['slice']}]"
+    else:
+        value = value
+    return value
+
+
+def return_assert_value(func_data: Dict):
     """
         TODO: need to fix structure to one view. In some cases args come with result pack in some no
     :param func_data:
@@ -18,11 +39,11 @@ def return_assert_value(func_data):
     random_values = None
     if func_data['args']:
         null_param = {a: None for a in func_data['args']}
-        if not func_data.get('ifs', None):
-            # if no ifs statements
-            pack_param_strategy = generate_params_based_on_types(null_param, func_data)
-            # get result for this strategy
-            _return_value = get_assert_for_params(func_data, pack_param_strategy)
+        # if no ifs statements
+        pack_param_strategy = generate_params_based_on_types(null_param, func_data,
+                                                             func_data.get('ifs'), func_data['return'][0])
+        # get result for this strategy
+        _return_value = get_assert_for_params(func_data, pack_param_strategy)
     if not func_data['return']:
         # if function with 'pass' or without return statement
         func_data['return'] = [{'args': {}, 'result': None}]
@@ -61,7 +82,6 @@ def return_assert_value(func_data):
                 _return_value = result_value[0]
             else:
                 _return_value = tuple(result_value)
-            print(_return_value)
         elif isinstance(return_pack['result'], dict) and 'BinOp' in return_pack['result']:
             # 'args': bin_op_args or params, 'result': return_value
 
@@ -72,7 +92,7 @@ def return_assert_value(func_data):
             else:
                 pack_result = get_assert_for_params(func_data, args)
             args = pack_result['args']
-            _return_value = eval_binop_with_params(return_pack['result'], args, args)
+            _return_value = eval_bin_op_with_params(return_pack['result'], args, args)
             if isinstance(_return_value, dict) and 'error' in _return_value:
                 err_message = _return_value['comment']
                 _return_value = _return_value['error']
@@ -92,7 +112,7 @@ def return_assert_value(func_data):
                 for key, value in return_pack['result'].items():
                     # in dict we can have as values - binop, evals and etc. this can be anything
                     if isinstance(value, dict) and 'l_value' in value:
-                        eval_result, random_value = check_eval_result(value, func_data)
+                        eval_result, random_value = run_function_several_times(value, func_data)
                         if eval_result:
                             return_pack['result'][key] = eval_result
                         elif random_value:
@@ -102,21 +122,8 @@ def return_assert_value(func_data):
                             random_values.append(key)
                     elif isinstance(value, dict) and 'BinOp' in value:
                         # mean we need execute BinOp
-                        if isinstance(value['left'], dict) and 'arg' in value['left']:
-                            if 'args' in value['left']['arg']:
-                                left = f"{value['left']['arg']['args']}[\'{value['left']['slice']}\']"
-                            else:
-                                left = f"{value['left']['arg']}[\'{value['left']['slice']}\']"
-                        else:
-                            left = value['left']
-                        if isinstance(value['right'], dict) and 'arg' in value['right']:
-                            if 'args' in value['right']['arg']:
-                                right = f"{value['right']['arg']['args']}[\'{value['right']['slice']}\']"
-                            else:
-                                right = f"{value['right']['arg']}[\'{value['right']['slice']}\']"
-                        else:
-                            right = value['right']
-                        print(args)
+                        left = get_sliced_value(value['left'])
+                        right = get_sliced_value(value['right'])
                         try:
                             return_pack['result'][key] = eval(
                                 f'{left}{operators[value["op"].__class__]}{right}', deepcopy(args))
@@ -131,8 +138,9 @@ def return_assert_value(func_data):
         yield args, _return_value, err_message, return_pack.get('log', False), random_values
 
 
-def check_eval_result(statement, func_data):
+def run_function_several_times(statement, func_data):
     """
+        we want to understand does function produce random result or not
         sample statements = {'l_value': {'func': {'l_value': {'value': 'uuid',
             't': 'import'}, 'attr': 'uuid4'}, 'args': []}, 'attr': 'hex'}
 
@@ -169,77 +177,77 @@ def check_eval_result(statement, func_data):
         for i in range(0, 2):
             results.append(eval(statement))
     if results[0] != results[1]:
-        print('Different ouputs per run')
+        print('Different outputs per run')
         random_values = True
     # maybe make sense return len of result if random values
     return eval_result, random_values
 
 
+def resolve_bin_op_in_result(return_pack, params):
+    if not return_pack.get('BinOp'):
+        return_pack['BinOp'] = True
+    # update binops_arg per tuple with common generated args for function
+    params_ = return_pack.get('binop_args', {})
+    params_.update(params)
+    if isinstance(return_pack['BinOp'], bool):
+        bin_op = return_pack
+    else:
+        bin_op = return_pack['BinOp']
+    return eval_bin_op_with_params(bin_op, params_, params_)
+
+
+def resolve_tuple_in_return(result_tuple: Tuple, params: Dict) -> Union[List, Any]:
+    result = []
+    for num, elem in enumerate(result_tuple):
+        if isinstance(result_tuple[num], dict):
+            if 'BinOp' in result_tuple[num]:
+                # if we have binop as one of the values in tuple
+                eval_result = resolve_bin_op_in_result(result_tuple[num], params)
+                if isinstance(eval_result, dict) and 'error' in eval_result:
+                    result = eval_result
+                    break
+                else:
+                    result.append(eval_result)
+            else:
+                result.append(elem)
+        elif type(result_tuple[num] in normal_types):
+            result.append(result_tuple[num])
+        else:
+            result.append(result_tuple[num])
+    return result
+
+
 def get_assert_for_params(func_data, params):
-    return_value = None
     bin_op_args = None
-    print(" print(func_data['args'])")
-    print(func_data['args'])
-
-    print(func_data)
-
     return_value = set()
     for return_pack in func_data['return']:
         _result = return_pack.get('result', {})
         if isinstance(_result, tuple):
-            bin_op_args = {}
-            result = []
-            for num, elem in enumerate(return_pack['result']):
-                if isinstance(return_pack['result'][num], dict):
-                    print("return_pack['result'][num]")
-                    print(return_pack['result'][num])
-                    if 'arg' in return_pack['result'][num]:
-                        return_value.add(params[return_pack['result'][num]['arg']])
-                    elif 'BinOp' in return_pack['result'][num]:
-                        return_pack['BinOp'] = True
-                        # update binops_arg per tuple with common generated args for function
-                        params_ = return_pack['result'][num].get('binop_args', {})
-                        params_.update(params)
-                        if isinstance(return_pack['result'][num]['BinOp'], bool):
-                            bin_op = return_pack['result'][num]
-                        else:
-                            bin_op = return_pack['result'][num]['BinOp']
-
-                        eval_result = eval_binop_with_params(bin_op, params_, params_)
-                        print(eval_result)
-                        if isinstance(eval_result, dict) and 'error' in eval_result:
-                            result = eval_result
-                            break
-                        else:
-                            result.append(eval_result)
-                    else:
-                        result.append(elem)
-                elif type(return_pack['result'][num] in normal_types):
-                    result.append(return_pack['result'][num])
-                else:
-                    result.append(_result)
-            print(return_value)
+            result = resolve_tuple_in_return(return_pack['result'], params)
             if isinstance(result, list):
                 return_value = tuple(result)
             else:
                 return_value = result
         elif isinstance(_result, dict) and 'BinOp' in _result:
             # update binops_arg per tuple with common generated args for function
-            params_ = return_pack['result'].get('binop_args', {})
-            params_.update(params)
-            if isinstance(return_pack['result']['BinOp'], bool):
-                bin_op = return_pack['result']
-            else:
-                bin_op = return_pack['result']['BinOp']
-            return_pack['result'] = eval_binop_with_params(bin_op, params_, params_)
+            return_pack['result'] = resolve_bin_op_in_result(return_pack['result'], params)
         elif isinstance(_result, dict) and 'args' in _result:
             params = _result['args']
-        elif _result is None:
-            return_value = None
         else:
             return_value = _result
+    args = bin_op_args or params
+    del_keys = []
+    for key, value in args.items():
+        if '[' in key:
+            arg = key.split('[')[0]
+            _slice = key.split('[')[1].split(']')[0]
+            args[arg] = params[arg]
+            args[arg][_slice] = value
+            del_keys.append(key)
 
-    result = {'args': bin_op_args or params, 'result': return_value}
+    for _key in del_keys:
+        del args[_key]
+    result = {'args': args, 'result': return_value}
     return result
 
 
@@ -255,7 +263,7 @@ def simplify_bin_op(bin_op, eval_params, params):
         if isinstance(bin_op[item], dict):
             try:
                 if 'BinOp' in bin_op[item]:
-                    bin_op[item] = eval_binop_with_params(bin_op[item], eval_params, params)
+                    bin_op[item] = eval_bin_op_with_params(bin_op[item], eval_params, params)
                     if isinstance(bin_op[item], dict) and 'error' in bin_op[item]:
                         print(bin_op)
                         return bin_op[item]
@@ -268,7 +276,7 @@ def simplify_bin_op(bin_op, eval_params, params):
                 return return_value
 
 
-def eval_binop_with_params(bin_op, eval_params, params):
+def eval_bin_op_with_params(bin_op, eval_params, params):
     """
         eval BinOp with params to get result
     :param bin_op:
@@ -303,4 +311,5 @@ def eval_binop_with_params(bin_op, eval_params, params):
     except Exception as e:
         analyzer.pytest_needed = True
         return_value = {'error': e.__class__.__name__, 'comment': e}
+
     return return_value

@@ -13,7 +13,7 @@ def map_types(_type, slices=None):
     elif _type == int:
         return int_generator()
     elif _type == list or _type == List:
-        return list_generator()
+        return list_generator(slices)
     else:
         print(_type)
         return 'need_to_define_generator'
@@ -28,26 +28,34 @@ def int_generator():
 
 
 def float_generator():
-    return random()
+    return round(random() * 10, 2)
 
 
 def dict_generator(keys=None):
     _dict = {}
     if keys:
-        print(keys)
         for key in keys:
-            print(keys)
             _dict.update({key: map_types(keys[key]['type'])})
     return _dict
 
 
-def list_generator(max_index: int = 1, elem_types=None):
+def list_generator(slices_):
+    """
+    :param slices_:
+                {0: {'type': <class 'float'>}}
+    :return:
+    """
     # TODO: can be different types in one list in different indexes
     list_output = []
-    for i in range(max_index):
-        if not elem_types:
-            elem_types = int
-        list_output.append(map_types(elem_types))
+
+    default_elem_type = list(slices_.values())[0]['type']
+    for i in range(max(slices_.keys()) + 1):
+        if not slices_.get(i):
+            elem_type = default_elem_type
+        else:
+            elem_type = slices_.get(i)['type']
+        value = map_types(elem_type)
+        list_output.append(value)
     return list_output
 
 
