@@ -9,6 +9,7 @@ def function_with_constant_return_int():
 def function_with_constant_return_float():
 	return 1.003
 
+
 def function_with_statement_return():
 	return (1 * 4) * int('3')
 
@@ -29,7 +30,6 @@ def function_with_statement_return_based_on_inside_var_with_several_vars_and_nam
 	second_dir = {'int': 23}
 	alias_var = dict_var
 	return (dict_var['num'] * alias_var['value_two']) * second_dir['int']
-
 
 
 def function_with_str():

@@ -46,13 +46,16 @@ def gen_params(args, keys, null_param):
     return params
 
 
-def generate_value_in_borders(previous_statements, func_data, null_param={}):
+def generate_value_in_borders(previous_statements, func_data, null_param):
     """
         generate values if exist previous borders (statemnts) from 'ifs'
     :param previous_statements:
-    :param args:
+    :param func_data:
+    :param null_param:
     :return:
     """
+    if not null_param:
+        null_param = {}
     final_args = {}
     for arg in func_data['args']:
         wrong_values = []

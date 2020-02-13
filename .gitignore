@@ -7,3 +7,4 @@ build/
 .tox/
 laziest.egg-info/
 docs/build
+.idea/
