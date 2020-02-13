@@ -417,7 +417,7 @@ class Analyzer(ast.NodeVisitor):
     @staticmethod
     def extract_types_from_docstring(body_item: _ast.Name) -> dict:
         """ try to get types form node
-                :type class_name:
+        :param body_item:
         """
         doc = ast.get_docstring(body_item)
         doc_types = {}

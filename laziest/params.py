@@ -46,7 +46,9 @@ def gen_params(args, keys, null_param):
     return params
 
 
+
 def generate_value_in_borders(previous_statements, func_data, null_param=None):
+
     """
         generate values if exist previous borders (statemnts) from 'ifs'
     :param previous_statements:
@@ -54,6 +56,8 @@ def generate_value_in_borders(previous_statements, func_data, null_param=None):
     :param null_param:
     :return:
     """
+    if null_param is None:
+        null_param = {}
 
     final_args = {}
     if not null_param:
