@@ -14,6 +14,8 @@ def map_types(_type, slices=None):
         return int_generator()
     elif _type == list or _type == List:
         return list_generator(slices)
+    elif _type is None:
+        return int_generator()
     else:
         print(_type)
         return 'need_to_define_generator'

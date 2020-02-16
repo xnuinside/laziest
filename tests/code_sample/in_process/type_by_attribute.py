@@ -1,3 +1,13 @@
+def split_line(line):
+    splitted_line = line.split()
+    return splitted_line
+
+
+def index_line(array, elem):
+    _index = array.index(elem)
+    return _index
+
+
 def parse_cookie(cookie):
     cookiedict = {}
     for chunk in cookie.split(';'):

@@ -65,11 +65,10 @@ class Analyzer(ast.NodeVisitor):
         value = self.get_value(statement.test, variables_names, variables)
         # we work with args from statements
         args = {}
-        previous_statements.append(value)
+        # list because if will be multiple values - it cannot be one rule in dict
+        previous_statements.append([value])
+        # TODO: need to add support of multiple statements in one condition
         _value = self.get_operand_value(value['left'])
-        print("_VAL")
-        print(_value)
-        print(value)
         if value['ops'] == '==':
             args = {_value: value['comparators']}
         elif value['ops'] == '>':
@@ -86,16 +85,14 @@ class Analyzer(ast.NodeVisitor):
                 func_data = self.process_if_construction(
                     orelse, func_data, variables_names, variables, previous_statements)
             elif isinstance(orelse, ast.Return):
-                func_data['return'].append(self.generate_arg_based_on_previous_conditions(
-                    orelse.value, func_data, previous_statements))
+                func_data['return'].append(self.get_value(orelse))
         func_data['ifs'] = previous_statements
         return func_data
 
-    def generate_arg_based_on_previous_conditions(self, return_node, func_data, previous_statements):
+    def generate_arg_based_on_previous_conditions(self, return_node, previous_statements):
         return_value = self.get_value(return_node)
         if 'args' in return_value:
-            _value = generate_value_in_borders(previous_statements, func_data, {return_value['args']: None})
-            print(_value)
+            _value = generate_value_in_borders(previous_statements, {return_value['args']: None})
             return {'args': _value, 'result': return_value}
 
     def extract_variables_in_scope(self, node):
@@ -165,11 +162,16 @@ class Analyzer(ast.NodeVisitor):
         self.func_data['keys'][_slice][arg] = {'type': None}
 
     def set_type_to_func_args(self, arg, _type):
-        if isinstance(arg, dict):
-            arg_name = arg['arg']
+        if isinstance(arg, dict) and arg.get('arg'):
+            arg_name = arg.get('arg')
             if isinstance(arg_name, dict) and 'args' in arg_name:
                 arg_name = arg_name['args']
-            self.func_data['keys'][arg['slice']][arg_name]['type'] = _type
+            if 'slice' in arg:
+                self.func_data['keys'][arg['slice']][arg_name]['type'] = _type
+        elif isinstance(arg, dict) and arg.get('args'):
+            arg_name = arg['args']
+            if 'slice' in arg:
+                self.func_data['keys'][arg['slice']][arg_name]['type'] = _type
         elif arg in self.func_data['args']:
             self.func_data['args'][arg]['type'] = _type
 
@@ -270,9 +272,6 @@ class Analyzer(ast.NodeVisitor):
                         else:
                             # mean both of them - function args
                             self.set_type_to_func_args(arg, float)
-            else:
-                if isinstance(bin_op_right, dict) and 'BinOp' not in bin_op_right and 'BinOp'  in bin_op_left:
-                    self.set_type_to_func_args(bin_op_right, int)
             return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
 
         elif isinstance(node, _ast.Subscript):
@@ -284,12 +283,7 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.Index):
             return self.get_value(node.value,  variables_names, variables)
         elif 'func' in node.__dict__:
-            print(node.__dict__)
-            print(node.func.__dict__)
             if 'id' in node.func.__dict__:
-                print(node.func.__dict__)
-                print(node.keywords)
-                print(node.args[0].__dict__)
                 if node.func.id == 'print':
                     return ", ".join([self.get_value(x)['text'] for x in node.args])
                 if node.keywords:
@@ -318,7 +312,6 @@ class Analyzer(ast.NodeVisitor):
             result = {'text': self.source[node.lineno - 1][node.col_offset:-1]}
             return result
         elif isinstance(node, _ast.FormattedValue):
-            print(node.value.__dict__)
             return self.get_value(node.value)
         elif isinstance(node, _ast.UnaryOp):
             _op_map = {
@@ -329,9 +322,10 @@ class Analyzer(ast.NodeVisitor):
             return eval(f'{_op_map[node.op.__class__]}{self.get_value(node.operand)}')
         elif isinstance(node, _ast.Attribute):
             value = self.get_value(node.value)
-            print(value)
 
             return {'l_value': value, 'attr': node.attr}
+        elif isinstance(node, _ast.Return):
+            return {'result': self.get_value(node.value)}
         else:
             print("new type",
                   node,
@@ -343,10 +337,8 @@ class Analyzer(ast.NodeVisitor):
         for arg in body_item.args.args:
             if arg.annotation:
                 if 'value' in arg.annotation.__dict__:
-                    print(arg.annotation.__dict__)
                     type_arg = arg.annotation.value.id
                 else:
-                    print(arg.annotation.__dict__)
                     type_arg = arg.annotation.id
             else:
                 type_arg = self.extract_types_from_docstring(body_item)
@@ -367,13 +359,11 @@ class Analyzer(ast.NodeVisitor):
                     value = [self.get_value(x) for x in body_item.value.elts]
                 else:
                     value = self.get_value(body_item.value)
-                print('Assign', var, value)
                 class_dict['args'].append((var, value))
             if not isinstance(body_item, ast.FunctionDef):
                 continue
 
             args = self.get_function_args(body_item)
-            print(args)
             defaults = []
             for item in body_item.args.defaults:
                 if isinstance(item, _ast.Str):
@@ -381,11 +371,6 @@ class Analyzer(ast.NodeVisitor):
                 elif isinstance(item, _ast.Num):
                     defaults.append(item.n)
                 else:
-                    print(item)
-                    print(item.__dict__)
-                    if 'op' in item.__dict__:
-                        print(item.op.__dict__)
-                        print(item.operand.__dict__)
                     defaults.append(item.value)
 
             if len(args) > len(defaults):
@@ -395,8 +380,6 @@ class Analyzer(ast.NodeVisitor):
                 args[arg]['default'] = defaults[num]
 
             funct_info = self.visit_FunctionDef(body_item, class_=True)
-            print('funct_info')
-            print(funct_info)
             if funct_info['args']:
                 funct_info['doc'] = self.extract_types_from_docstring(body_item)
             for decorator in body_item.decorator_list:

@@ -1,3 +1,4 @@
+
 def function():
 	pass
 
@@ -60,7 +61,6 @@ def function_with_return_alias():
 	result = (dict_var['num'] * alias_var['value_two']) + second_dir['str']
 	return result
 
-
 def function_with_return_alias_with_error():
 	dict_var = {'num': 'alias', 'value_two': 1}
 	second_dir = {'str': 123}
@@ -75,4 +75,3 @@ def function_with_tuple_return():
 	alias_var = dict_var
 	result = (dict_var['num'] * alias_var['value_two']) + second_dir['str']
 	return result, second_dir, alias_var
-
