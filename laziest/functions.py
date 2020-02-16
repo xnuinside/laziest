@@ -117,7 +117,9 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
 
             def _get_str_value():
                 for arg, value in args.items():
+                    print(arg, value)
                     locals()[arg] = value
+
                 str_ = f"\'{eval(return_value)}\\n\'"
                 return str_
             asserts_definition_str = function_header + f"\n{s.SP_4}" \
@@ -141,8 +143,6 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
             return_value = str(return_value) if not isinstance(return_value, str) else f"\'{return_value}\'"
             asserts_definition_str = function_header + f"{eq_line}" + return_value + f"\n{s.SP_4}"
         asserts_definition.add(asserts_definition_str)
-    print('asserts_definition')
-    print(asserts_definition)
     for assert_ in asserts_definition:
         func_definition += f"\n{s.SP_4}" + assert_
     return func_definition, log, imports

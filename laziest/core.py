@@ -36,6 +36,10 @@ def run_laziest(args: dict):
     pw = PathWalker(path, fp, cfg.recursive)
     # get paths to python modules
     paths = [x for x in pw.python_files if '__init__' not in x]
+    # TODO: need to add codegraph
+    #   create code graph, iterate on bunch of functions, not files
+    #   1st level (with no dependencies)
+    #   2nd level (with deps on functions/clases) of first level and etc
 
     # if not config_args.get('overwrite', False):
     # append = True
