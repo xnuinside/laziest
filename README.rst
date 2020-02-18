@@ -148,16 +148,10 @@ How create case:
         user_data['name'] = new_name
         return user_data
 
+3. If you added some features in code, please make sure to update tests as appropriate:
 
-
-For major changes, please open an issue first to discuss what you would like to change.
-
-Please make sure to update tests as appropriate:
-
-    This is mean you add in laziest/tests/code_sample/done function/class/another language
-construction that successful covered by generator and tests, that was generated also passed.
-
-
+    This is mean you add in laziest/tests/code_sample/done construction that successful covered by generator
+and tests that was generated also passed.
 
 
 
