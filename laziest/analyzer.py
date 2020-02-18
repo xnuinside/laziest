@@ -3,11 +3,10 @@ import ast
 import _ast
 
 from copy import deepcopy
-from typing import Any, Text, Dict
+from typing import Any, Text, Dict, Union, List
 from pprint import pprint
 from collections import defaultdict, OrderedDict
 from laziest import ast_meta as meta
-from laziest.params import generate_value_in_borders
 from random import randint
 
 pytest_needed = False
@@ -36,17 +35,18 @@ class Analyzer(ast.NodeVisitor):
         self.variables = []
         self.variables_names = []
 
-    def visit_Import(self, node):
+    def visit_Import(self, node: ast.Import):
         for alias in node.names:
             self.tree["import"].append(alias.name)
         self.generic_visit(node)
 
-    def visit_FromImport(self, node):
+    def visit_ImportFrom(self, node: _ast.ImportFrom):
         for alias in node.names:
             self.tree["from"].append(alias.name)
         self.generic_visit(node)
 
-    def get_operand_value(self, value):
+    @staticmethod
+    def get_operand_value(value: Any):
         """ arg can be single like int, str and etc or it can be slice like dict, list, tuple and etc.
             sample with slice {'arg': {'args': 'arg1'}, 'slice': 3}
         """
@@ -58,7 +58,10 @@ class Analyzer(ast.NodeVisitor):
                 value = value['args']
         return value
 
-    def process_if_construction(self, statement, func_data, variables_names, variables, previous_statements=None):
+    def process_if_construction(
+            self, statement: _ast.If, func_data: Dict,
+            variables_names: Dict, variables: List,
+            previous_statements: List = None):
         if previous_statements is None:
             previous_statements = []
         # we get variables from statement
@@ -89,13 +92,8 @@ class Analyzer(ast.NodeVisitor):
         func_data['ifs'] = previous_statements
         return func_data
 
-    def generate_arg_based_on_previous_conditions(self, return_node, previous_statements):
-        return_value = self.get_value(return_node)
-        if 'args' in return_value:
-            _value = generate_value_in_borders(previous_statements, {return_value['args']: None})
-            return {'args': _value, 'result': return_value}
+    def extract_variables_in_scope(self, node: ast.FunctionDef):
 
-    def extract_variables_in_scope(self, node):
         """
             method to extract variables and variables names, that used in scope
         :param node:
@@ -114,7 +112,7 @@ class Analyzer(ast.NodeVisitor):
         self.func_data['variables'] = self.variables
         return variables, variables_names
 
-    def function_data_base(self, node, async_f):
+    def function_data_base(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], async_f: bool) -> Dict:
         """
             define base for collection function_data
         :param node:
@@ -130,7 +128,7 @@ class Analyzer(ast.NodeVisitor):
                           'variables': []}
         return self.func_data
 
-    def visit_FunctionDef(self, node, async_f=False, class_=None):
+    def visit_FunctionDef(self, node: ast.FunctionDef, async_f: bool = False, class_: Dict = None):
         """ main methods to """
         func_data = self.function_data_base(node, async_f)
         variables, variables_names = self.extract_variables_in_scope(node)
@@ -150,18 +148,18 @@ class Analyzer(ast.NodeVisitor):
             func_data['return'] = [{'args': (), 'result': None}]
         return func_data
 
-    def visit_If(self, node):
+    def visit_If(self, node: ast.If):
         raise Exception(node.__dict__)
 
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)
 
-    def set_slices_to_func_args(self, arg, _slice):
+    def set_slices_to_func_args(self, arg: Text, _slice: Union[Text, int]):
 
         self.func_data['args'][arg]['type'] = dict if isinstance(_slice, str) else list
         self.func_data['keys'][_slice][arg] = {'type': None}
 
-    def set_type_to_func_args(self, arg, _type):
+    def set_type_to_func_args(self, arg: Union[Text, Dict], _type: Any):
         if isinstance(arg, dict) and arg.get('arg'):
             arg_name = arg.get('arg')
             if isinstance(arg_name, dict) and 'args' in arg_name:
@@ -175,7 +173,7 @@ class Analyzer(ast.NodeVisitor):
         elif arg in self.func_data['args']:
             self.func_data['args'][arg]['type'] = _type
 
-    def process_ast_name(self, node, variables_names, variables):
+    def process_ast_name(self, node: _ast.Name, variables_names: List, variables: Dict):
         """
             find value of 'Name' node
         :param node:
@@ -203,7 +201,7 @@ class Analyzer(ast.NodeVisitor):
             raise Exception(node.id)
 
     @staticmethod
-    def extract_args_in_bin_op(item, args):
+    def extract_args_in_bin_op(item: Union[Dict, Any], args: List):
         if isinstance(item, dict) and 'arg' in item:
             if 'args' in item['arg']:
                 # mean this is a function arg, need to set type
@@ -218,7 +216,7 @@ class Analyzer(ast.NodeVisitor):
 
         return args
 
-    def get_value(self, node: Any, variables_names: Dict = None, variables: Dict = None) -> Any:
+    def get_value(self, node: Any, variables_names: Dict = None, variables: List = None) -> Any:
         """
             extract values from different types of node
         :param node:
@@ -295,7 +293,11 @@ class Analyzer(ast.NodeVisitor):
                             for x in node.args]
                     return eval("{}({})".format(node.func.id, ", ".join(args)))
             else:
-                return {'func': self.get_value(node.func), 'args': node.args}
+                if node.args:
+                    arg = self.get_value(node.args[0])['args']
+                else:
+                    arg = {}
+                return {'func': self.get_value(node.func), 'args': arg}
         elif isinstance(node, _ast.Compare):
             result = {'left': self.get_value(node.left, variables_names, variables),
                       'ops': self.get_value(node.ops[0], variables_names, variables),
@@ -321,9 +323,13 @@ class Analyzer(ast.NodeVisitor):
             }
             return eval(f'{_op_map[node.op.__class__]}{self.get_value(node.operand)}')
         elif isinstance(node, _ast.Attribute):
-            value = self.get_value(node.value)
+            if getattr(node.value, 'id', None) and getattr(node.value, 'id', None) in self.func_data['args']:
+                # TODO: need to add with slice
+                self.set_type_by_attrib(node.value.id, node.attr)
 
-            return {'l_value': value, 'attr': node.attr}
+            value = self.get_value(node.value)
+            attr = self.get_attr_call_line(node)
+            return {'l_value': value, 'attr': attr}
         elif isinstance(node, _ast.Return):
             return {'result': self.get_value(node.value)}
         else:
@@ -331,6 +337,21 @@ class Analyzer(ast.NodeVisitor):
                   node,
                   node.__dict__)
             raise
+
+    def get_attr_call_line(self, node: _ast.Attribute) -> Text:
+        line = self.source[node.lineno-1][node.col_offset:]
+        _call = line.split(node.attr)[1].split()[0].replace(',', '')
+        if '.' not in _call:
+            # mean we have a chain like .uuid().hex
+            attr_call = node.attr + _call
+        else:
+            attr_call = node.attr
+        return attr_call
+
+    def set_type_by_attrib(self, arg_name: Union[Text, Dict], attrib: Text, _slice: Union[Text, int] = None):
+        for _type in meta.stnd_types:
+            if getattr(_type, attrib, None):
+                self.set_type_to_func_args(arg_name, _type)
 
     def get_function_args(self, body_item: _ast.Name):
         args = OrderedDict()

@@ -41,7 +41,6 @@ class PathWalker(object):
         # TODO: add ignore files, subdirs
         self.path = os.path.abspath(path)
         self.fp = fp
-        print(recursive)
         self.recursive = recursive
         self.python_files = self.found_python_files()
 
@@ -49,7 +48,6 @@ class PathWalker(object):
         """ found all python files, depend on passed path """
         if os.path.isdir(self.path):
             self.path = self.path+"/*" if not self.recursive else self.path+"/**"
-            print(self.path)
         paths = sorted([path for path in glob(self.path, recursive=self.recursive) if path.endswith('.py')])
         ignore_paths = []
         for path in paths:

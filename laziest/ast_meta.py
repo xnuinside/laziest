@@ -1,5 +1,7 @@
 import _ast
 
+# TODO: need order by popularity
+stnd_types = [str, int, list, dict, tuple, set, float, bool]
 
 iterated = {_ast.List: list,
             _ast.Set: set,
