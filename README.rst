@@ -115,6 +115,7 @@ You also can just run generator on separated functions to see does generator cov
 
 For current example 'separated' functions can be at least (because 1 and 2 already supported):
 1.
+
 def function_with_multiple_if_conditions(new_name, use_data, validate_len):
     if validate_len != 0 and len(new_name) > 15:
             raise Exception("Impossible to set so long name. Lenght of the name must be < 15 symbols)
@@ -122,6 +123,7 @@ def function_with_multiple_if_conditions(new_name, use_data, validate_len):
 
 
 2. now same but with default value
+
 def function_with_default_value(new_name, use_data, validate_len=True):
     if validate_len != False:
             raise Exception("Impossible to set so long name. Lenght of the name must be < 15 symbols)
@@ -130,20 +132,20 @@ def function_with_default_value(new_name, use_data, validate_len=True):
 
 3. now same but without '!='
 
-    def function_with_if_exist(new_name, use_data, validate_len=True):
-        if validate_len:
-                raise Exception("Impossible to set so long name. Lenght of the name must be < 15 symbols)
-        return user_data
+def function_with_if_exist(new_name, use_data, validate_len=True):
+    if validate_len:
+            raise Exception("Impossible to set so long name. Lenght of the name must be < 15 symbols)
+    return user_data
 
 You can change places of 2 and 3 - this is not matter.
 
 4. and at the end
 
-    def function_with_vars_operations(new_name, use_data, validate_len=True):
-        if validate_len and len(new_name) > 15:
-                raise Exception("Impossible to set so long name. Lenght of the name must be < 15 symbols)
-        user_data['name'] = new_name
-        return user_data
+def function_with_vars_operations(new_name, use_data, validate_len=True):
+    if validate_len and len(new_name) > 15:
+            raise Exception("Impossible to set so long name. Lenght of the name must be < 15 symbols)
+    user_data['name'] = new_name
+    return user_data
 
 3. If you added some features in code, please make sure to update tests as appropriate:
 
