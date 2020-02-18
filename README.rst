@@ -4,6 +4,40 @@ Laziest
 Generator of test_*.py files for your Python code.
 Package that trying generate unit tests for you.
 
+In step of testing idea :)
+
+From code like this:
+
+def one_condition_custom_exception_and_return_binary_op_and_key(arg1, arg2, arg3):
+    if arg1 == '1':
+        raise CustomException('we hate 1')
+    elif arg2[3] > 2:
+        print(f'{arg2[3]} more when 2')
+    var = 1
+    alias = var
+    return arg1 * arg2[3] + arg3['number'], var * arg1 * alias - 2
+
+
+Laziest create such test:
+
+def test_one_condition_custom_exception_and_return_binary_op_and_key(capsys):
+
+    assert one_condition_custom_exception_and_return_binary_op_and_key(
+        arg1=-720, arg2=[1.14, 5.79, 0.67, -984], arg3={"number": 1}
+    ) == (708481, -722)
+
+    with pytest.raises(CustomException):
+        #  error message: we hate 1
+        one_condition_custom_exception_and_return_binary_op_and_key(
+            arg1="1", arg2=[1.14, 5.79, 0.67, 2.05], arg3={"number": 1}
+        )
+    one_condition_custom_exception_and_return_binary_op_and_key(
+        arg1=166, arg2=[1.14, 5.79, 0.67, 935], arg3={"number": 1}
+    )
+    captured = capsys.readouterr()
+    assert captured.out == "935 more when 2\n"
+
+
 
 Introducing
 -----------
@@ -68,7 +102,37 @@ Run tests with 'pytest' to check that they are valid:
     pytest /home/yourUser/laziest/tests/functional/test_primitive_code.py
 
 
+Flag -d
+*******
+
+If you want to generate empty tests in case if code not supported by generator yet, you can use flag '-d'.
+Output will be - generated modules for all functions, but without asserts, in body of function you will see a
+comment with error and 'pass'.
+
+For example, you have a code with logic, that not supported yet by generator, for example:
+
+def string_format_named_three_args(arg1, arg2, arg3):
+    return '{first} this is {name} ! {last}'.format(name=arg1, first=arg2, last=arg3)
+
+
+If you run lazy with flag '-d' - you will have success test generation and in test module you will see for this function test:
+
+def test_string_format_named_three_args():
+
+    # string indices must be integers
+
+    # Traceback (most recent call last):
+    #  File "/Users/jvolkova/laziest/laziest/functions.py", line 163, in test_creation
+    #    func_definition, func_name, func_data, class_, class_method_type)
+    # TypeError: string indices must be integers
+    #
+    pass
+
+Tests
+*****
+
 You can run laziest tests with tox and check output.
+
 
 
 Contributing

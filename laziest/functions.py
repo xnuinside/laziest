@@ -1,7 +1,7 @@
 from typing import Dict, Text, Tuple
 from laziest import strings as s
+import traceback
 import re
-# from laziest.params import generate_params_based_on_types
 from laziest.asserter import return_assert_value
 
 reserved_words = ['self', 'cls']
@@ -148,17 +148,29 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
     return func_definition, log, imports
 
 
-def test_creation(func_name: Text, func_data: Dict,
+def test_creation(func_name: Text, func_data: Dict, debug: bool,
                   class_=None, class_method_type=None) -> Tuple[Text, Text]:
     """ method to generate test body """
+    imports = []
     if class_:
         func_definition = get_method_signature(func_name, func_data['async_f'], class_['name'])
     else:
         metod_signature = get_method_signature(func_name, func_data['async_f'])
         func_definition = metod_signature
-    func_definition, log, imports = test_body_resolver(func_definition, func_name, func_data, class_, class_method_type)
-    func_definition += "\n\n\n"
-    if log:
-        method_signature_with_capture = metod_signature.replace('()', '(capsys)')
-        func_definition = func_definition.replace(metod_signature, method_signature_with_capture)
+    if isinstance(func_data, dict) and 'error' not in func_data:
+        try:
+            func_definition, log, imports = test_body_resolver(
+                func_definition, func_name, func_data, class_, class_method_type)
+            func_definition += "\n\n\n"
+            if log:
+                method_signature_with_capture = metod_signature.replace('()', '(capsys)')
+                func_definition = func_definition.replace(metod_signature, method_signature_with_capture)
+        except Exception as e:
+            if debug:
+                trace = "".join([f'\n{s.SP_4}#{line}' for line in traceback.format_exc(1).split('\n')])
+                func_definition += f'\n{s.SP_4}# {e}\n{trace}\n{s.SP_4}pass\n'
+            else:
+                raise e
+    else:
+        func_definition += f'\n{s.SP_4}# {func_data["comment"]}\n{s.SP_4}pass\n'
     return func_definition, imports

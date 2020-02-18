@@ -45,17 +45,17 @@ def run_laziest(args: dict):
     # append = True
     # run differ, to collect existed file names and methods
     # pass
-    generate_bunch_of_test_files(paths)
+    generate_bunch_of_test_files(paths, args['debug'])
     exit(0)
 
 
-def generate_bunch_of_test_files(python_paths):
+def generate_bunch_of_test_files(python_paths, debug):
     num_cores = mp.cpu_count()
     pool = mp.Pool(num_cores)
     jobs = []
 
     for python_file in python_paths:
-        jobs.append(pool.apply_async(tests_generator_per_file, (python_file,)))
+        jobs.append(pool.apply_async(tests_generator_per_file, (python_file, debug)))
 
     # wait for all jobs to finish
     for job in list(jobs):
@@ -69,7 +69,7 @@ def generate_bunch_of_test_files(python_paths):
     pool.join()
 
 
-def tests_generator_per_file(python_file):
+def tests_generator_per_file(python_file, debug):
     print(f'Run test generation for {python_file}')
     # run TestSetCreator to get list of expected test files
     append = False
@@ -79,7 +79,7 @@ def tests_generator_per_file(python_file):
     with open(python_file, "r") as source:
         source_massive = source.read()
         tree = parse(source_massive)
-    an = Analyzer(source_massive)
+    an = Analyzer(source_massive, debug)
     an.visit(tree)
     an.report()
 
@@ -89,7 +89,8 @@ def tests_generator_per_file(python_file):
         signatures_list['classes'].append(test_method_prefix + class_['name'])
 
     # run test file generator
-    tf_content = generate_test_file_content(an, python_file)
+    print(debug)
+    tf_content = generate_test_file_content(an, python_file, debug)
     if append:
         # append new tests to tf
         # if new method in test case for class - insert

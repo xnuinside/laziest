@@ -10,7 +10,6 @@ def get_value_name(value: Union[Dict, Any], separate_slice: bool = False) -> Any
     :return:
     """
     if isinstance(value, dict) and 'arg' in value:
-
         if 'args' in value['arg']:
             args = value['arg']['args']
         else:

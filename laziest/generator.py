@@ -8,7 +8,7 @@ from laziest import functions as f
 import laziest.analyzer as a
 
 
-def generate_tests(tree: Dict):
+def generate_tests(tree: Dict, debug: bool):
     """ main method return tests body/list for one python module """
     test_case = ""
     imports = []
@@ -28,7 +28,7 @@ def generate_tests(tree: Dict):
         imports.append(class_['name'])
     for func_name in tree['def']:
         # define test for sync function
-        unit_test, funct_imports = f.test_creation(func_name, tree['def'][func_name])
+        unit_test, funct_imports = f.test_creation(func_name, tree['def'][func_name], debug=debug)
         for import_ in funct_imports:
             imports.append(import_)
         test_case += unit_test
@@ -51,9 +51,9 @@ def add_imports(path):
     return imports_header
 
 
-def generate_test_file_content(an: Analyzer, path: Text) -> Text:
+def generate_test_file_content(an: Analyzer, path: Text, debug: bool) -> Text:
     async_in = True if an.tree.get('async') else False
-    result = generate_tests(an.tree)
+    result = generate_tests(an.tree, debug)
     if result:
         # need to add import of module that we test
         file_output = combine_file(result, path, async_in)

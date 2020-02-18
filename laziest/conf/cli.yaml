@@ -11,6 +11,10 @@ commands:
       help: "show laziest version"
       action: show_version()
 
+    - keys: ['-d', '--debug']
+      help: "If debug is on - create empty tests method in test module, if generator cannot create test"
+      action: "store_true"
+
     - keys: ['-r', '--recursive']
       help: "Parse folder recursive to get list of '.py' files for test generation"
       default: True

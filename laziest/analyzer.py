@@ -1,7 +1,6 @@
 """ result of analyzers work - data from ast that needed to asserter """
 import ast
 import _ast
-
 from copy import deepcopy
 from typing import Any, Text, Dict, Union, List
 from pprint import pprint
@@ -18,11 +17,13 @@ class Analyzer(ast.NodeVisitor):
     """ class to parse files in dict structure to provide to generator data,
     that needed for tests generation """
 
-    def __init__(self, source: Text):
+    def __init__(self, source: Text, debug: bool):
         """
             source - code massive
+        :param debug:
         :param source:
         """
+        self.debug = debug
         self.tree = {"import": [],
                      "from": [],
                      "def": {},
@@ -130,22 +131,29 @@ class Analyzer(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef, async_f: bool = False, class_: Dict = None):
         """ main methods to """
-        func_data = self.function_data_base(node, async_f)
-        variables, variables_names = self.extract_variables_in_scope(node)
-        non_variables_nodes_bodies = [node for node in node.body if node not in variables]
-        for body_item in non_variables_nodes_bodies:
-            if isinstance(body_item, ast.Return):
-                return_ = {'result': self.get_value(body_item.value, variables_names, variables)}
-                func_data['return'].append(return_)
-            if isinstance(body_item, _ast.If):
-                func_data = self.process_if_construction(
-                    body_item, self.func_data, variables_names, variables)
-        if not class_:
-            self.tree['def'][node.name] = deepcopy(func_data)
+        try:
+            func_data = self.function_data_base(node, async_f)
+            variables, variables_names = self.extract_variables_in_scope(node)
+            non_variables_nodes_bodies = [node for node in node.body if node not in variables]
+            for body_item in non_variables_nodes_bodies:
+                if isinstance(body_item, ast.Return):
+                    return_ = {'result': self.get_value(body_item.value, variables_names, variables)}
+                    func_data['return'].append(return_)
+                if isinstance(body_item, _ast.If):
+                    func_data = self.process_if_construction(
+                        body_item, self.func_data, variables_names, variables)
+            if not class_:
+                self.tree['def'][node.name] = deepcopy(func_data)
 
-        if not func_data['return']:
-            # if function does not return anything
-            func_data['return'] = [{'args': (), 'result': None}]
+            if not func_data['return']:
+                # if function does not return anything
+                func_data['return'] = [{'args': (), 'result': None}]
+        except Exception as e:
+            if self.debug:
+
+                func_data = {'error': e.__class__.__name__, 'comment': e}
+            else:
+                raise e
         return func_data
 
     def visit_If(self, node: ast.If):
