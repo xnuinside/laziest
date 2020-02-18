@@ -24,3 +24,10 @@ def string_format_named(arg1):
 
 def string_format_named_three_args(arg1, arg2, arg3):
     return '{first} this is {name} ! {last}'.format(name=arg1, first=arg2, last=arg3)
+
+
+def string_format_with_un_op(arg1, arg2, arg3):
+    var = '{first} this is {name} ! {last}'.format(name=arg1, first=arg2, last=arg3)
+    var += '. End.'
+    var *= 3
+    return var

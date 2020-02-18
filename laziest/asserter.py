@@ -45,7 +45,7 @@ def get_reversed_previous_statement(previous_statement: List) -> List:
     return not_previous_statement
 
 
-def form_strategies(func_data):
+def form_strategies(func_data: Dict):
     # todo: need to move it on analyzer with refactoring
     s = []
     if not func_data.get('ifs'):
@@ -63,7 +63,8 @@ def form_strategies(func_data):
     return func_data
 
 
-def resolve_strategy(return_pack, func_data, strategy, base_params):
+def resolve_strategy(return_pack: Dict, func_data: Dict, strategy: Dict, base_params: Dict):
+    # TODO: split this method on small functions, very long
     args = return_pack.get('args', {})
     null_param = {}
     err_message = None
@@ -126,24 +127,36 @@ def resolve_strategy(return_pack, func_data, strategy, base_params):
                 _return_value = return_pack['result']
         else:
             random_values = []
-            for key, value in return_pack['result'].items():
-                # in dict we can have as values - binop, evals and etc. this can be anything
-                if isinstance(value, dict) and 'l_value' in value:
-                    eval_result, random_value = run_function_several_times(value, func_data)
-                    if eval_result:
-                        return_pack['result'][key] = eval_result
-                    elif random_value:
-                        # mean eval return each time different values, so we see functions like uuid.uuid4().hex
-                        # and to check output we need use different checks, like for example, that key in dict
-                        # and value not None
-                        random_values.append(key)
-                elif isinstance(value, dict) and 'BinOp' in value:
-                    # mean we need execute BinOp
-                    try:
-                        return_pack['result'][key] = eval_bin_op_with_params(value,
-                                                                             pack_param_strategy, pack_param_strategy)
-                    except KeyError as e:
-                        return_pack['result'] = {'error': e.__class__.__name__, 'comment': e}
+            if len(list(return_pack['result'].keys())) == 2 and 'func' in return_pack['result'] \
+                    and 'args' in return_pack['result']:
+                eval_result, random_value = run_function_several_times(
+                    return_pack['result'], func_data, pack_param_strategy)
+                if eval_result:
+                    return_pack['result'] = eval_result
+                elif random_value:
+                    # mean eval return each time different values, so we see functions like uuid.uuid4().hex
+                    # and to check output we need use different checks, like for example, that key in dict
+                    # and value not None
+                    random_values.append(return_pack['result'])
+            else:
+                for key, value in return_pack['result'].items():
+                    # in dict we can have as values - binop, evals and etc. this can be anything
+                    if isinstance(value, dict) and 'l_value' in value:
+                        eval_result, random_value = run_function_several_times(value, func_data, pack_param_strategy)
+                        if eval_result:
+                            return_pack['result'][key] = eval_result
+                        elif random_value:
+                            # mean eval return each time different values, so we see functions like uuid.uuid4().hex
+                            # and to check output we need use different checks, like for example, that key in dict
+                            # and value not None
+                            random_values.append(key)
+                    elif isinstance(value, dict) and 'BinOp' in value:
+                        # mean we need execute BinOp
+                        try:
+                            return_pack['result'][key] = eval_bin_op_with_params(
+                                value, pack_param_strategy, pack_param_strategy)
+                        except KeyError as e:
+                            return_pack['result'] = {'error': e.__class__.__name__, 'comment': e}
 
             _return_value = return_pack['result']
     else:
@@ -180,7 +193,7 @@ def return_assert_value(func_data: Dict):
         yield args, _return_value, err_message, log, random_values
 
 
-def run_function_several_times(statement, func_data):
+def run_function_several_times(statement: Dict, func_data: Dict, pack_param_strategy: Dict):
     """
         we want to understand does function produce random result or not
         sample statements = {'l_value': {'func': {'l_value': {'value': 'uuid',
@@ -188,11 +201,13 @@ def run_function_several_times(statement, func_data):
 
     :param statement:
     :param func_data:
+    :param pack_param_strategy:
     :return:
     """
     eval_result = None
     random_values = []
     _import = None
+    # TODO: need split this code and remove statement
     while isinstance(statement, dict):
         if not isinstance(statement.get('value', {}), dict):
             _load = func_data[statement['t']].get(statement['value'])
@@ -205,27 +220,34 @@ def run_function_several_times(statement, func_data):
                 if 'l_value' in _statement and 'attr' in _statement['l_value']:
                     _statement['l_value']['attr'] = _statement['l_value']['attr'] + '.' + statement.get('attr', '')
                     _statement = _statement['l_value']
+                if 'l_value' in _statement and 'args' in _statement['l_value']:
+                    _statement = _statement['l_value']['args'] + '.' + _statement.get('attr')
                 elif 'func' in _statement:
                     _statement['func']['attr'] = _statement['func']['attr'] + '()' + '.' + statement.get('attr', '')
                     statement = _statement['func']
+                elif 'l_value' not in _statement:
+                    _statement = f'{_statement["args"]}.{statement["attr"]}'
                 elif 't' in _statement['l_value']:
                     # we found start object
                     _import = _statement['l_value']['value']
                     _statement = _statement['l_value']['value'] + '.' + _statement.get('attr')
         statement = _statement
+
     results = []
     if _import:
         globals()[_import] = __import__(_import, _import)
-        for i in range(0, 2):
-            results.append(eval(statement))
+    for i in range(0, 2):
+        results.append(eval(statement, globals().update(deepcopy(pack_param_strategy))))
     if results[0] != results[1]:
         print('Different outputs per run')
         random_values = True
     # maybe make sense return len of result if random values
+    if not random_values:
+        eval_result = results[0]
     return eval_result, random_values
 
 
-def resolve_bin_op_in_result(return_pack, params):
+def resolve_bin_op_in_result(return_pack: Dict, params: Dict):
     if not return_pack.get('BinOp'):
         return_pack['BinOp'] = True
     # update binops_arg per tuple with common generated args for function
@@ -259,7 +281,7 @@ def resolve_tuple_in_return(result_tuple: Tuple, params: Dict) -> Union[List, An
     return result
 
 
-def get_assert_for_params(return_pack, params):
+def get_assert_for_params(return_pack: Dict, params: Dict):
     bin_op_args = None
     return_value = return_pack.get('result', {})
 
@@ -304,9 +326,9 @@ def get_assert_for_params(return_pack, params):
     return result
 
 
-def simplify_bin_op(bin_op, eval_params, params):
+def simplify_bin_op(bin_op: Dict, eval_params: Dict, params: Dict) -> Dict:
     """
-        eval each side of BinOp, simplify nested BinOp statements by step-by-step evalution
+        eval each side of BinOp, simplify nested BinOp statements by step-by-step execution
     :param bin_op:
     :param eval_params:
     :param params:
@@ -339,12 +361,12 @@ def simplify_bin_op(bin_op, eval_params, params):
                 return return_value
 
 
-def eval_bin_op_with_params(bin_op, eval_params, params):
+def eval_bin_op_with_params(bin_op: Dict, eval_params: Dict, params: Dict) -> Union[Any, Dict]:
     """
         eval BinOp with params to get result
     :param bin_op:
-    :param eval_params:
-    :param params:
+    :param eval_params: can contain imports of standard modules if needed in eval
+    :param params: arguments and variables that used in BinOp
     :return:
     """
     eval_params.update(params)

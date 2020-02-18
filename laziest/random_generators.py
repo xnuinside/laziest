@@ -1,6 +1,6 @@
 # TODO: temporary, after need to integrate with hypothesis or smth else to generate values
 from typing import Dict, Text, List
-from random import random, randint
+from random import random, randint, choice
 
 
 def map_types(_type, slices=None):
@@ -22,7 +22,7 @@ def map_types(_type, slices=None):
 
 
 def str_generator():
-    return 'random_string'
+    return choice(['random_string', 'ghs dsla ds', '@gmail.com'])
 
 
 def int_generator():
