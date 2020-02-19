@@ -45,6 +45,9 @@ Laziest create such test:
 
 Introducing
 -----------
+`>>> Some slides with idea <<<
+<https://docs.google.com/presentation/d/e/2PACX-1vSXnDvg4BbdOzuw9ryCuYUqbKtgtKYSNw2JfCc56_rwqH3Vqq2wDbsB_OWC6wuSmnQVpXSRtqgUP8gu/pub?start=false&loop=false&delayms=5000&slide=id.g7df2d22da0_0_0>`_
+
 
 Hi!
 
