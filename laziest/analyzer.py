@@ -181,7 +181,7 @@ class Analyzer(ast.NodeVisitor):
         elif arg in self.func_data['args']:
             self.func_data['args'][arg]['type'] = _type
 
-    def process_ast_name(self, node: _ast.Name, variables_names: List, variables: Dict):
+    def process_ast_name(self, node: _ast.Name, variables_names: Dict, variables: List):
         """
             find value of 'Name' node
         :param node:
@@ -263,21 +263,27 @@ class Analyzer(ast.NodeVisitor):
                 # count result of bin op
                 return eval(f'{bin_op_left}{meta.operators[node.op.__class__]}{bin_op_right}')
             math_type = True
+            if isinstance(node.left, _ast.Str) and isinstance(node.op, _ast.Add):
+                # concatination
+                math_type = False
             if (isinstance(bin_op_left, dict) and 'BinOp' not in bin_op_left) \
                     and (isinstance(bin_op_right, dict) and 'BinOp' not in bin_op_right) or (
                     not (isinstance(bin_op_left, dict) or not (isinstance(bin_op_right, dict)))):
                 for item in [bin_op_right, bin_op_left]:
                     args = self.extract_args_in_bin_op(item, args)
-                if args and math_type:
+                if args:
                     for arg in args:
-                        # TODO: maybe make sense to add int also
-                        if isinstance(node.op, _ast.Mult) and isinstance(
-                                bin_op_left, str) or isinstance(bin_op_right, str):
-                            # if at least one operand is string - we can multiply only with int
-                            self.set_type_to_func_args(arg, int)
+                        if math_type:
+                            # TODO: maybe make sense to add int also
+                            if isinstance(node.op, _ast.Mult) and isinstance(
+                                    bin_op_left, str) or isinstance(bin_op_right, str):
+                                # if at least one operand is string - we can multiply only with int
+                                self.set_type_to_func_args(arg, int)
+                            else:
+                                # mean both of them - function args
+                                self.set_type_to_func_args(arg, float)
                         else:
-                            # mean both of them - function args
-                            self.set_type_to_func_args(arg, float)
+                            self.set_type_to_func_args(arg, str)
             return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
 
         elif isinstance(node, _ast.Subscript):

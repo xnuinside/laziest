@@ -4,6 +4,8 @@ from random import random, randint, choice
 
 
 def map_types(_type, slices=None):
+    if isinstance(_type, str):
+        _type = eval(_type)
     if _type == Text or _type == str:
         return str_generator()
     elif _type == dict or _type == Dict:
@@ -17,7 +19,6 @@ def map_types(_type, slices=None):
     elif _type is None:
         return int_generator()
     else:
-        print(_type)
         return 'need_to_define_generator'
 
 
@@ -49,8 +50,11 @@ def list_generator(slices_):
     """
     # TODO: can be different types in one list in different indexes
     list_output = []
-
-    default_elem_type = list(slices_.values())[0]['type']
+    if slices_:
+        default_elem_type = list(slices_.values())[0]['type']
+    else:
+        default_elem_type = int
+        slices_ = {0: 0}
     for i in range(max(slices_.keys()) + 1):
         if not slices_.get(i):
             elem_type = default_elem_type

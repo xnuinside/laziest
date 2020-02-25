@@ -56,13 +56,6 @@ version = "0.0.3"
 [package.dependencies]
 PyYAML = ">=5.3,<6.0"
 
-[[package]]
-category = "main"
-description = "Tool that create a graph of code to show dependencies between code entities (methods, classes and etc)."
-name = "codegraph"
-optional = false
-python-versions = ">=3.7,<4.0"
-version = "0.0.4"
 
 [package.dependencies]
 clifier = ">=0.0.3,<0.0.4"
