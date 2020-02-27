@@ -28,12 +28,16 @@ def convert(name):
 def class_methods_names_create(func_name, class_, class_method_type):
 
     snake_case_var = convert(class_["name"])
+    # if no init args
+    class_instance = f'{snake_case_var} = {class_["name"]}()\n'
     if not class_method_type:
         raise
     elif class_method_type not in ['static', 'class', 'self']:
         raise
     if class_method_type == 'static' or class_method_type == 'class':
         func_name = f'{class_["name"]}.{func_name}'
+        # we nod need to initialise object
+        class_instance = None
     else:
         if '__init__' in class_['def'].get('self'):
             # init_args = class_['def']['self']['__init__']['args']
@@ -43,11 +47,11 @@ def class_methods_names_create(func_name, class_, class_method_type):
             # params_line = ', '.join([f'{key}={value}' for key, value in params.items()])
             ...
         func_name = f'{snake_case_var}.{func_name}'
-    return func_name
+    return class_instance, func_name
 
 
-def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
-                       class_=None, class_method_type=None) -> Text:
+def test_body_resolver(test_func_definition: Text, func_name: Text, func_data: Dict,
+                       class_=None, class_method_type=None):
     """
         func_data format:
              {.. 'def': {'function': {'args': OrderedDict(),
@@ -67,7 +71,7 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
                                                  'kargs_def': [],
                                                  'return': 1.003} ...}
          'return': [{args: {arg1: , arg2: , arg3 }, result: }]
-    :param func_definition:
+    :param test_func_definition:
     :param func_name:
     :param func_data:
     :param class_:
@@ -75,14 +79,15 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
     :return:
     """
     instance_ = None
-
+    class_instance = None
     if class_:
-        func_name = class_methods_names_create(func_name, class_, class_method_type)
+        class_instance, func_name = class_methods_names_create(func_name, class_, class_method_type)
     if not instance_:
         function_header_init = s.assert_string
     else:
         function_header_init = instance_ + "\n" + s.SP_4 + s.assert_string
-
+    if class_instance:
+        test_func_definition += class_instance
     asserts_definition = set()
     imports = []
     log = False
@@ -144,8 +149,8 @@ def test_body_resolver(func_definition: Text, func_name: Text, func_data: Dict,
             asserts_definition_str = function_header + f"{eq_line}" + return_value + f"\n{s.SP_4}"
         asserts_definition.add(asserts_definition_str)
     for assert_ in asserts_definition:
-        func_definition += f"\n{s.SP_4}" + assert_
-    return func_definition, log, imports
+        test_func_definition += f"\n{s.SP_4}" + assert_
+    return test_func_definition, log, imports
 
 
 def test_creation(func_name: Text, func_data: Dict, debug: bool,

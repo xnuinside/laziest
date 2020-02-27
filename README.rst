@@ -67,7 +67,7 @@ So if you want to know how far this idea can go - join me in this interesting an
 
 
 Little bit of history
-------------------
+---------------------
 
 This is a 3rd version of package implementation, before using a mix of work with AST and tokenisation (current state)
 I tried different ways:
@@ -187,13 +187,10 @@ C. You must to be sure, that already supported (or covered by cases):
 
 1. Functions with arguments
 2. if statements
-3. if statements with 2 or more conditions, because here we see 'validate_len' - first condition
-    and 'len(new_name) > 15' - second condition
-4. you need check that conditions like 'if something' are supported and covered or create cases for that separate.
-Why does it matter? Because, 'if validate_len' under the hood mean 'validate_len != 0, validate_len != [],
-    validate_len != () or any other empty container'
+3. if statements with 2 or more conditions, because here we see 'validate_len' - first condition and 'len(new_name) > 15' - second condition
+4. you need check that conditions like 'if something' are supported and covered or create cases for that separate. Why does it matter? Because, 'if validate_len' under the hood mean 'validate_len != 0, validate_len != [], validate_len != () or any other empty container'
 5. correct work with default values for 'validate_len=True' - so need 2 assert, test with default value and without
-5. and etc.
+6. and etc.
 
 D. Try to split your result on blocks, if you don't see in code samples something that already ready.
 You also can just run generator on separated functions to see does generator cover test case correct or not.
@@ -242,8 +239,7 @@ You can change places of 2 and 3 - this is not matter.
 
 3. If you added some features in code, please make sure to update tests as appropriate:
 
-    This is mean you add in laziest/tests/code_sample/done construction that successful covered by generator
-and tests that was generated also passed.
+This is mean you add in laziest/tests/code_sample/done construction that successful covered by generator and tests that was generated also passed.
 
 
 License

@@ -23,8 +23,12 @@ def generate_tests(tree: Dict, debug: bool):
         for type_ in method_types:
             for method in class_['def'].get(type_, []):
                 if method != '__init__':
-                    test_case += f.test_creation(method, class_['def'][type_][method],
-                                                 class_=class_, class_method_type=type_)
+                    unit_test, funct_imports = f.test_creation(
+                        method, class_['def'][type_][method],
+                        class_=class_, class_method_type=type_, debug=debug)
+                    for import_ in funct_imports:
+                        imports.append(import_)
+                    test_case += unit_test
         imports.append(class_['name'])
     for func_name in tree['def']:
         # define test for sync function

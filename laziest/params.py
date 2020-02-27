@@ -8,6 +8,8 @@ from laziest.random_generators import map_types
 from laziest.utils import get_value_name, is_int
 no_default = 'no_default'
 
+cls_reserved_args = ['self', 'cls']
+
 
 def generate_params_based_on_strategy(args: Dict, func_data: Dict, strategies=None, base_params=None):
     params = deepcopy(args)
@@ -21,7 +23,8 @@ def generate_params_based_on_strategy(args: Dict, func_data: Dict, strategies=No
 
 def gen_params(args, keys, null_param):
     params = deepcopy(null_param)
-    for arg in args:
+    filterred_args = [arg for arg in args if arg not in cls_reserved_args]
+    for arg in filterred_args:
         if 'if' in args[arg]:
             for value in args[arg]['if']:
                 new_value = deepcopy(null_param)
