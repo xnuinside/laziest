@@ -5,7 +5,6 @@ from copy import deepcopy
 from typing import Any, Text, Dict, Union, List
 from pprint import pprint
 from collections import defaultdict, OrderedDict
-from collections.abc import Iterable
 from laziest import ast_meta as meta
 from random import randint
 
@@ -147,9 +146,9 @@ class Analyzer(ast.NodeVisitor):
                         body_item, self.func_data, variables_names, variables)
             for result in func_data['return']:
                 result = result['result']
-                if 'func' in result:
+                if isinstance(result, dict) and 'func' in result:
                     arg = result['args']
-                    if arg in self.func_data['args']:
+                    if not isinstance(arg, dict) and arg in self.func_data['args']:
                         # mean in function we use upper function argument
                         self.identify_type_by_attr(arg, result['func'], variables, variables_names)
             if not class_:
