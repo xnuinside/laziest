@@ -1,7 +1,3 @@
-def index_line(array, elem):
-    _index = array.index(elem)
-    return _index
-
 
 def parse_cookie(cookie):
     cookiedict = {}

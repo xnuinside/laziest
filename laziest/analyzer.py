@@ -5,12 +5,15 @@ from copy import deepcopy
 from typing import Any, Text, Dict, Union, List
 from pprint import pprint
 from collections import defaultdict, OrderedDict
+from collections.abc import Iterable
 from laziest import ast_meta as meta
 from random import randint
 
 pytest_needed = False
-
+jedi_param_type_line = 'param {param_name}: '
 bin_ops = ['+', '-', '*', '/', '', '%', '//']
+
+no_type_value = 'No type'
 
 
 class Analyzer(ast.NodeVisitor):
@@ -142,6 +145,13 @@ class Analyzer(ast.NodeVisitor):
                 if isinstance(body_item, _ast.If):
                     func_data = self.process_if_construction(
                         body_item, self.func_data, variables_names, variables)
+            for result in func_data['return']:
+                result = result['result']
+                if 'func' in result:
+                    arg = result['args']
+                    if arg in self.func_data['args']:
+                        # mean in function we use upper function argument
+                        self.identify_type_by_attr(arg, result['func'], variables, variables_names)
             if not class_:
                 self.tree['def'][node.name] = deepcopy(func_data)
 
@@ -168,6 +178,10 @@ class Analyzer(ast.NodeVisitor):
         self.func_data['keys'][_slice][arg] = {'type': None}
 
     def set_type_to_func_args(self, arg: Union[Text, Dict], _type: Any):
+        optional = 'Optional['
+
+        if isinstance(_type, str) and optional in _type:
+            _type = _type.split(optional)[1].split(']')[0]
         if isinstance(arg, dict) and arg.get('arg'):
             arg_name = arg.get('arg')
             if isinstance(arg_name, dict) and 'args' in arg_name:
@@ -180,6 +194,7 @@ class Analyzer(ast.NodeVisitor):
                 self.func_data['keys'][arg['slice']][arg_name]['type'] = _type
         elif arg in self.func_data['args']:
             self.func_data['args'][arg]['type'] = _type
+        return _type
 
     def process_ast_name(self, node: _ast.Name, variables_names: Dict, variables: List):
         """
@@ -311,7 +326,9 @@ class Analyzer(ast.NodeVisitor):
                     arg = self.get_value(node.args[0])['args']
                 else:
                     arg = {}
-                return {'func': self.get_value(node.func), 'args': arg}
+                func = self.get_value(node.func)
+                result = {'func': func, 'args': arg}
+                return result
         elif isinstance(node, _ast.Compare):
             result = {'left': self.get_value(node.left, variables_names, variables),
                       'ops': self.get_value(node.ops[0], variables_names, variables),
@@ -362,10 +379,44 @@ class Analyzer(ast.NodeVisitor):
             attr_call = node.attr
         return attr_call
 
+    def identify_type_by_attr(self, inner_function_arg, func, variables, variables_names):
+        # arg - l_value for attrib in function
+        import jedi
+        from jedi.api.completion import get_signature_param_names
+        arg = func['l_value']['args']
+        arg_type = None
+        # TODO: add check for args in variables
+        if arg in self.func_data['args']:
+            func_arg_type = self.func_data['args'][arg].get('type', None)
+            if func_arg_type:
+                if isinstance(func_arg_type, dict):
+                    if not func_arg_type.get(no_type_value):
+                        arg_type = func_arg_type
+                else:
+                    arg_type = func_arg_type
+        attrib = func["attr"].split('(')[0]
+        if not arg_type:
+            arg_type = self.set_type_by_attrib(arg, attrib=attrib)
+        init_arg_line = f'{arg} = {arg_type.__name__}(); '
+        line = f'{init_arg_line}{arg}.' + attrib
+        line = line[:-1]
+        script = jedi.Script(line)
+        completions = script.complete(1, len(line))
+        first_param = [x for x in get_signature_param_names([completions[0]])][0]
+        line = line.split('.')[0] + '.' + completions[0].name + '(' + str(first_param.get_public_name())
+        line = line[:-1]
+        script = jedi.Script(line)
+        completions = script.complete(1, len(line))
+        split_line = jedi_param_type_line.format(param_name=first_param.get_public_name()[:-1])
+        split_description = completions[0].description.split(split_line)
+        complete_type = split_description[1]
+        self.set_type_to_func_args(inner_function_arg, complete_type)
+        return completions
+
     def set_type_by_attrib(self, arg_name: Union[Text, Dict], attrib: Text, _slice: Union[Text, int] = None):
         for _type in meta.stnd_types:
             if getattr(_type, attrib, None):
-                self.set_type_to_func_args(arg_name, _type)
+                return self.set_type_to_func_args(arg_name, _type)
 
     def get_function_args(self, body_item: _ast.Name):
         args = OrderedDict()
@@ -440,7 +491,7 @@ class Analyzer(ast.NodeVisitor):
         doc = ast.get_docstring(body_item)
         doc_types = {}
         if not doc or 'type' not in doc:
-            doc_types['No type'] = True
+            doc_types[no_type_value] = True
         else:
             for arg in body_item.args.args:
                 print('type', arg.arg, doc.split(arg.arg))
