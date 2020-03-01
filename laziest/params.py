@@ -24,7 +24,6 @@ def generate_params_based_on_strategy(args: Dict, func_data: Dict, strategies=No
 def gen_params(args, keys, null_param):
     params = deepcopy(null_param)
     dependend_args = [arg for arg in args if arg not in cls_reserved_args and 'depend_on' in args[arg]]
-    print(dependend_args)
     filterred_args = [arg for arg in args if arg not in cls_reserved_args and arg not in dependend_args]
     for arg in filterred_args:
         if 'if' in args[arg]:

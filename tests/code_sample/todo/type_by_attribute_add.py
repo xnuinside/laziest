@@ -1,4 +1,3 @@
-
 def parse_cookie(cookie):
     cookiedict = {}
     for chunk in cookie.split(';'):

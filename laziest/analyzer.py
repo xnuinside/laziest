@@ -10,7 +10,6 @@ from random import randint
 
 pytest_needed = False
 jedi_param_type_line = 'param {param_name}: '
-bin_ops = ['+', '-', '*', '/', '', '%', '//']
 
 no_type_value = 'No type'
 
@@ -83,7 +82,7 @@ class Analyzer(ast.NodeVisitor):
         result = self.get_value(statement.body[0])
         index = len(func_data['return'])
         if 'print' in result:
-            result = result['print']['text'].replace('    ', '')
+            result = result['print']['text'].strip()
         func_data['return'].append({'args': args, 'result': result})
         func_data['return'][index]['log'] = True
         for orelse in statement.orelse:
@@ -103,7 +102,8 @@ class Analyzer(ast.NodeVisitor):
         :return:
         """
         # local variables, assign statements in function body
-        variables = [node for node in node.body if isinstance(node, ast.Assign)]
+        variables = [node for node in node.body if isinstance(node, ast.Assign)
+                     if node.targets[0].id not in self.func_data['args']]
         variables_names = {}
         if variables:
             # define code variables in dict
@@ -128,7 +128,8 @@ class Analyzer(ast.NodeVisitor):
                           'return': [],
                           'async_f': async_f,
                           'keys': defaultdict(dict),
-                          'variables': []}
+                          'variables': [],
+                          'steps': {}}
         return self.func_data
 
     def visit_FunctionDef(self, node: ast.FunctionDef, async_f: bool = False, class_: Dict = None):
@@ -141,9 +142,19 @@ class Analyzer(ast.NodeVisitor):
                 if isinstance(body_item, ast.Return):
                     return_ = {'result': self.get_value(body_item.value, variables_names, variables)}
                     func_data['return'].append(return_)
-                if isinstance(body_item, _ast.If):
+                elif isinstance(body_item, _ast.If):
                     func_data = self.process_if_construction(
                         body_item, self.func_data, variables_names, variables)
+                elif getattr(body_item, 'target', None) and body_item.target.id in func_data['args']:
+                    # operations like arg_1 *= 10
+                    self.add_step_for_arg(body_item, variables_names, variables)
+                elif getattr(body_item, 'targets', None) and body_item.targets[0].id in func_data['args']:
+                    # operations like arg_1 *= 10
+                    self.add_step_for_arg(body_item, variables_names, variables)
+                elif isinstance(body_item, _ast.Pass):
+                    continue
+                else:
+                    raise
             for result in func_data['return']:
                 result = result['result']
                 if isinstance(result, dict) and 'func' in result:
@@ -169,6 +180,15 @@ class Analyzer(ast.NodeVisitor):
 
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)
+
+    def add_step_for_arg(self, node, variables_names, variables):
+        if getattr(node, 'target', None):
+            arg = node.target.id
+        elif getattr(node, 'targets', None):
+            arg = node.targets[0].id
+        if arg not in self.func_data['steps']:
+            self.func_data['steps'][arg] = []
+        self.func_data['steps'][arg].append(self.get_value(node, variables_names, variables))
 
     def set_slices_to_func_args(self, arg: Text, _slice: Union[Text, int]):
 
@@ -251,7 +271,6 @@ class Analyzer(ast.NodeVisitor):
         if not variables_names:
             variables_names = self.variables_names or {}
         if node_type in meta.simple:
-
             return node.__dict__[meta.values_for_ast_type[node_type]]
         elif node_type in meta.iterated:
             result = meta.iterated[node_type]([self.get_value(x, variables_names, variables)
@@ -268,6 +287,7 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.Raise):
             return {'error': node.exc.func.id, 'comment': self.get_value(node.exc.args[0])}
         elif isinstance(node, ast.BinOp):
+
             bin_op_left = self.get_value(node.left, variables_names, variables)
             bin_op_right = self.get_value(node.right, variables_names, variables)
             args = []
@@ -318,7 +338,11 @@ class Analyzer(ast.NodeVisitor):
                 else:
                     args = [self.get_value(x, variables_names, variables)
                             for x in node.args]
-                    return eval("{}({})".format(node.func.id, ", ".join(args)))
+                    if 'args' in args[0]:
+                        return_string = "{}({})".format(node.func.id, f'{args}')
+                        return {'func': return_string, 'inner_args': args}
+                    else:
+                        return eval("{}({})".format(node.func.id, ", ".join(args)))
             else:
                 if node.args:
                     arg = self.get_value(node.args[0])['args']
@@ -360,6 +384,20 @@ class Analyzer(ast.NodeVisitor):
             return {'l_value': value, 'attr': attr}
         elif isinstance(node, _ast.Return):
             return {'result': self.get_value(node.value)}
+        elif isinstance(node, _ast.AugAssign):
+            # arg_1 *= 10 operations
+            arg = self.get_value(node.target, variables_names, variables)
+            # TODO: need to modify type set, can be str also
+            if not self.func_data['args'][arg['args']].get('type') or (
+                    isinstance(self.func_data['args'][arg['args']]['type'], dict)
+                    and no_type_value in self.func_data['args'][arg['args']]['type']):
+                self.set_type_to_func_args(arg['args'], int)
+            if 'args' in arg:
+                return {'arg': arg,
+                        'op': f'{meta.operators[node.op.__class__]}=',
+                        'l_value': self.get_value(node.value, variables_names, variables)}
+            else:
+                raise
         else:
             print("new type",
                   node,
