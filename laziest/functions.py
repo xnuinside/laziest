@@ -93,8 +93,6 @@ def test_body_resolver(test_func_definition: Text, func_name: Text, func_data: D
     log = False
     returns_ = return_assert_value(func_data)
     for args, return_value, err_message, log_, random_values in returns_:
-        print('return_value')
-        print(return_value)
         await_prefix = '( await ' if func_data['async_f'] else ''
         # form text functions bodies based on args, return_values and comments
         if log_:
