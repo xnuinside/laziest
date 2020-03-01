@@ -159,7 +159,6 @@ class Analyzer(ast.NodeVisitor):
                 func_data['return'] = [{'args': (), 'result': None}]
         except Exception as e:
             if self.debug:
-
                 func_data = {'error': e.__class__.__name__, 'comment': e}
             else:
                 raise e
@@ -356,7 +355,6 @@ class Analyzer(ast.NodeVisitor):
             if getattr(node.value, 'id', None) and getattr(node.value, 'id', None) in self.func_data['args']:
                 # TODO: need to add with slice
                 self.set_type_by_attrib(node.value.id, node.attr)
-
             value = self.get_value(node.value)
             attr = self.get_attr_call_line(node)
             return {'l_value': value, 'attr': attr}
@@ -380,11 +378,11 @@ class Analyzer(ast.NodeVisitor):
 
     def identify_type_by_attr(self, inner_function_arg, func, variables, variables_names):
         # arg - l_value for attrib in function
+        # TODO: add check for args in variables, split method
         import jedi
         from jedi.api.completion import get_signature_param_names
         arg = func['l_value']['args']
         arg_type = None
-        # TODO: add check for args in variables
         if arg in self.func_data['args']:
             func_arg_type = self.func_data['args'][arg].get('type', None)
             if func_arg_type:
@@ -410,7 +408,18 @@ class Analyzer(ast.NodeVisitor):
         split_description = completions[0].description.split(split_line)
         complete_type = split_description[1]
         self.set_type_to_func_args(inner_function_arg, complete_type)
+        self.set_dependency_to_arg(inner_function_arg, arg)
         return completions
+
+    def set_dependency_to_arg(self, arg: Text, dependency_arg: Text):
+        """
+        :param arg:
+        :param dependency_arg:
+        :return:
+        """
+        # TODO: dependency can be different types  - must be a part of (for strings), must include, must be a index of
+        #      and etc.
+        self.func_data['args'][arg]['depend_on'] = dependency_arg
 
     def set_type_by_attrib(self, arg_name: Union[Text, Dict], attrib: Text, _slice: Union[Text, int] = None):
         for _type in meta.stnd_types:

@@ -47,6 +47,7 @@ def get_reversed_previous_statement(previous_statement: List) -> List:
 
 def form_strategies(func_data: Dict):
     # todo: need to move it on analyzer with refactoring
+    # TODO: need to add strategies for depend_on args - when arg match to expected value and when not
     s = []
     if not func_data.get('ifs'):
         s.append(StrategyAny())
@@ -64,29 +65,32 @@ def form_strategies(func_data: Dict):
 
 
 def resolve_strategy(return_pack: Dict, func_data: Dict, strategy: Dict, base_params: Dict):
-    # TODO: split this method on small functions, very long
+    # TODO: split this method on small functions, very long, refactor
 
     args = return_pack.get('args', {})
     null_param = {}
     err_message = None
     random_values = None
     log = return_pack.get('log', None)
+    rp_result = return_pack['result']
     if isinstance(strategy, StrategyAny):
         # mean we have no conditionals to args
         pack_param_strategy = generate_params_based_on_strategy(null_param, func_data)
-        _return_value = return_pack['result']
+        _return_value = rp_result
     else:
-        _return_value = return_pack['result']
+        _return_value = rp_result
         pack_param_strategy = generate_params_based_on_strategy(args,
                                                                 func_data,
                                                                 strategy,
                                                                 base_params)
 
-    if isinstance(return_pack['result'], tuple):
+    random_values = []
+
+    if isinstance(rp_result, tuple):
         # if we have tuple as result
         pack_result = None
         result_value = []
-        for elem in return_pack['result']:
+        for elem in rp_result:
             if getattr(elem, '__iter__', None) and 'BinOp' in elem:
                 # TODO: strange if
                 pack_result = get_assert_for_params(return_pack, pack_param_strategy)['result']
@@ -108,26 +112,29 @@ def resolve_strategy(return_pack: Dict, func_data: Dict, strategy: Dict, base_pa
             _return_value = result_value[0]
         else:
             _return_value = tuple(result_value)
-    elif isinstance(return_pack['result'], dict) and 'BinOp' in return_pack['result']:
+    elif isinstance(rp_result, dict) and 'BinOp' in rp_result:
         # 'args': bin_op_args or params, 'result': return_value
-        _return_value = eval_bin_op_with_params(return_pack['result'], pack_param_strategy, pack_param_strategy)
+        _return_value = eval_bin_op_with_params(rp_result, pack_param_strategy, pack_param_strategy)
         if isinstance(_return_value, dict) and 'error' in _return_value:
             err_message = _return_value['comment']
             _return_value = _return_value['error']
     elif isinstance(return_pack['result'], dict):
-        if 'error' in return_pack['result']:
+        if 'error' in rp_result:
             # if we have exception
-            _return_value = return_pack['result']['error']
-            err_message = return_pack['result']['comment']
+            _return_value = rp_result['error']
+            err_message = rp_result['comment']
+        elif 'func' in return_pack['result']:
+            _return_value, random = run_function_several_times(rp_result['func'], func_data, pack_param_strategy)
+            if random:
+                random_values.append(random)
+        elif return_pack.get('args') or rp_result.get('args'):
+            _args = rp_result.get('args') or return_pack['result'].get('binop_args')
 
-        elif return_pack.get('args') or return_pack['result'].get('args'):
-            _args = return_pack['result'].get('args') or return_pack['result'].get('binop_args')
             if _args:
                 _return_value = pack_param_strategy[_args]
             else:
                 _return_value = return_pack['result']
         else:
-            random_values = []
             if len(list(return_pack['result'].keys())) == 2 and 'func' in return_pack['result'] \
                     and 'args' in return_pack['result']:
                 eval_result, random_value = run_function_several_times(
