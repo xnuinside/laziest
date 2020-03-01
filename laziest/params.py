@@ -23,8 +23,15 @@ def generate_params_based_on_strategy(args: Dict, func_data: Dict, strategies=No
 
 def gen_params(args, keys, null_param):
     params = deepcopy(null_param)
-    dependend_args = [arg for arg in args if arg not in cls_reserved_args and 'depend_on' in args[arg]]
-    filterred_args = [arg for arg in args if arg not in cls_reserved_args and arg not in dependend_args]
+    depended_args, filterred_args = [], []
+
+    for arg in args:
+        if arg not in cls_reserved_args:
+            if 'depend_on' in args[arg]:
+                depended_args.append(arg)
+            else:
+                filterred_args.append(arg)
+
     for arg in filterred_args:
         if 'if' in args[arg]:
             for value in args[arg]['if']:
@@ -33,7 +40,6 @@ def gen_params(args, keys, null_param):
                 new_value[arg] = value
                 params.append(new_value)
                 args[arg]['type'] = type(value)
-
         elif 'default' in args.get(arg, []):
             params[arg] = args[arg]['default'] \
                 if args[arg]['default'] != no_default else randint(0, 7)
@@ -46,7 +52,7 @@ def gen_params(args, keys, null_param):
             params[arg] = map_types(args[arg]['type'], slices=_slices)
         else:
             params[arg] = randint(0, 7)
-    for arg in dependend_args:
+    for arg in depended_args:
         depend_on_arg = params[args[arg]['depend_on']]
         if isinstance(depend_on_arg, str):
             params[arg] = depend_on_arg[int(len(depend_on_arg)/3):len(depend_on_arg)-1]
