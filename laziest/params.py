@@ -4,7 +4,7 @@ from random import randint
 from collections import defaultdict
 from collections.abc import Iterable
 # TODO: temporary, after need to integrate with hypothesis or smth else to generate valuse
-from laziest.random_generators import map_types
+from laziest.arg_generators import map_types
 from laziest.utils import get_value_name, is_int
 no_default = 'no_default'
 
@@ -12,11 +12,11 @@ cls_reserved_args = ['self', 'cls']
 
 
 def generate_params_based_on_strategy(args: Dict, func_data: Dict, strategies=None, base_params=None):
-    params = deepcopy(args)
     if strategies and base_params:
         # we have a functions with ifs
         params = generate_value_in_borders(strategies, args, base_params)
     else:
+        params = deepcopy(args)
         params = gen_params(func_data['args'], func_data['keys'], params)
     return params
 
@@ -79,6 +79,8 @@ def add_border_to_arg(args_borders: Dict, arg_name: Text, value: Any, border: Te
     :param arg_name:
     :param value:
     :param border:
+    :param _slice:
+
     :return:
     TODO: need correct work with paired statements like
         arg1 < 5 and arg1 > 2 or arg1 > 7 and arg1 < 12
@@ -205,20 +207,20 @@ def prepare_args(args):
     return args
 
 
-def generate_value_in_borders(strategies: List, args: Dict, base_params: Dict = None):
+def generate_value_in_borders(strategies: List, args: Dict, all_function_args: Dict):
     """
         generate values if exist previous borders (statemnts) from 'ifs'
     :param strategies:
     :param args:
-    :param base_params:
+    :param all_function_args:
     :return:
     """
-    if base_params is None:
-        base_params = {}
+    if all_function_args is None:
+        all_function_args = {}
     # borders from strategies
-    for arg in base_params:
+    for arg in all_function_args:
         if arg not in args:
-            args[arg] = base_params[arg]
+            args[arg] = all_function_args[arg]
     args = prepare_args(args)
     args_borders = extract_border_values(strategies, args)
     for arg in args_borders:

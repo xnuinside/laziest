@@ -1,10 +1,83 @@
-from typing import Dict, Text, Tuple
-from laziest import strings as s
-import traceback
+""" Tests body generator """
+import os
 import re
-from laziest.asserter import return_assert_value
+import traceback
+from typing import Dict, Text, Tuple
+
+import laziest.strings as s
+import laziest.analyzer as a
+from laziest.analyzer import Analyzer
+from laziest.asserter import Asserter
 
 reserved_words = ['self', 'cls']
+
+
+key_import = '$import$'
+
+
+def generate_tests(tree: Dict, debug: bool):
+    """ main method return tests body/list for one python module """
+    test_case = ""
+    imports = []
+    # signature list need to check diff with existed tests
+    # method types : class, self, static
+    for class_ in tree['classes']:
+        # define test for non-empty classes function
+        if not class_['def']:
+            print("Empty class")
+            continue
+        method_types = ['self', 'class', 'static']
+        for type_ in method_types:
+            for method in class_['def'].get(type_, []):
+                if method != '__init__':
+                    unit_test, func_imports = test_creation(method, class_['def'][type_][method],
+                                                            class_=class_, class_method_type=type_, debug=debug)
+                    for import_ in func_imports:
+                        imports.append(import_)
+                    test_case += unit_test
+        imports.append(class_['name'])
+    for func_name in tree['def']:
+        # define test for sync function
+        unit_test, func_imports = test_creation(func_name, tree['def'][func_name], debug=debug)
+        for import_ in func_imports:
+            imports.append(import_)
+        test_case += unit_test
+        imports.append(func_name)
+    return a.pytest_needed, test_case, imports
+
+
+def add_imports(path):
+    imports_header = f'import sys\n' \
+                     f'sys.path.append(\'{os.path.dirname(path)}\')\n' \
+                     f'from {os.path.basename(path).replace(".py", "")} import {key_import}\n'
+
+    return imports_header
+
+
+def generate_test_file_content(an: Analyzer, path: Text, debug: bool) -> Text:
+    async_in = True if an.tree.get('async') else False
+    result = generate_tests(an.tree, debug)
+    if result:
+        # need to add import of module that we test
+        file_output = combine_file(result, path, async_in)
+        return file_output
+
+
+def combine_file(result: tuple, path: Text, async_in: bool) -> Text:
+    """
+        combine file body
+    :param result: result of main generator function
+    :param path: path to file, that we test
+    :param async_in: exist async in or not, shall we import sync pytest or not
+    :return:
+    """
+    file_output = add_imports(path).replace(key_import, ", ".join(result[2]))
+    if async_in:
+        file_output = s.async_io_aware_text + file_output
+    file_output += "\n\n"
+    file_output += result[1]
+    file_output = "import pytest\n" + file_output
+    return file_output
 
 
 def get_method_signature(func_name: Text, async_type: bool, class_name=None) -> Text:
@@ -91,7 +164,11 @@ def test_body_resolver(test_func_definition: Text, func_name: Text, func_data: D
     asserts_definition = set()
     imports = []
     log = False
-    returns_ = return_assert_value(func_data)
+    # init asserter
+    asserter = Asserter(func_data)
+    # get returns result per args group
+    returns_ = asserter.return_assert_values()
+
     for args, return_value, err_message, log_, random_values in returns_:
         await_prefix = '( await ' if func_data['async_f'] else ''
         # form text functions bodies based on args, return_values and comments

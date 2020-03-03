@@ -6,7 +6,7 @@ from typing import Text
 import multiprocessing as mp
 from laziest.analyzer import Analyzer
 from laziest.strings import test_method_prefix
-from laziest.generator import generate_test_file_content
+from laziest.codegen import generate_test_file_content
 from laziest.conf.config import init_config, default_settings
 from laziest.walker import PathWalker, FilteredPaths
 

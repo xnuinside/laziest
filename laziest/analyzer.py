@@ -14,6 +14,10 @@ jedi_param_type_line = 'param {param_name}: '
 no_type_value = 'No type'
 
 
+class StrategyAny:
+    pass
+
+
 class Analyzer(ast.NodeVisitor):
     """ class to parse files in dict structure to provide to generator data,
     that needed for tests generation """
@@ -162,6 +166,8 @@ class Analyzer(ast.NodeVisitor):
                     if not isinstance(arg, dict) and arg in self.func_data['args']:
                         # mean in function we use upper function argument
                         self.identify_type_by_attr(arg, result['func'], variables, variables_names)
+
+            func_data = self.form_strategies(func_data)
             if not class_:
                 self.tree['def'][node.name] = deepcopy(func_data)
 
@@ -197,7 +203,6 @@ class Analyzer(ast.NodeVisitor):
 
     def set_type_to_func_args(self, arg: Union[Text, Dict], _type: Any):
         optional = 'Optional['
-
         if isinstance(_type, str) and optional in _type:
             _type = _type.split(optional)[1].split(']')[0]
         if isinstance(arg, dict) and arg.get('arg'):
@@ -287,7 +292,6 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.Raise):
             return {'error': node.exc.func.id, 'comment': self.get_value(node.exc.args[0])}
         elif isinstance(node, ast.BinOp):
-
             bin_op_left = self.get_value(node.left, variables_names, variables)
             bin_op_right = self.get_value(node.right, variables_names, variables)
             args = []
@@ -334,13 +338,12 @@ class Analyzer(ast.NodeVisitor):
                 if node.keywords:
                     args = [str("{}={},".format(
                         x.arg, self.get_value(x.value, variables_names, variables))) for x in node.keywords]
-                    return "{}({})".format(node.func.id, "".join(args))
+                    return {'func': node.func.id, 'args': "".join(args)}
                 else:
                     args = [self.get_value(x, variables_names, variables)
                             for x in node.args]
                     if 'args' in args[0]:
-                        return_string = "{}({})".format(node.func.id, f'{args}')
-                        return {'func': return_string, 'inner_args': args}
+                        return {'func': node.func.id, 'args': args}
                     else:
                         return eval("{}({})".format(node.func.id, ", ".join(args)))
             else:
@@ -394,15 +397,56 @@ class Analyzer(ast.NodeVisitor):
                 self.set_type_to_func_args(arg['args'], int)
             if 'args' in arg:
                 return {'arg': arg,
-                        'op': f'{meta.operators[node.op.__class__]}=',
+                        'op': f'{meta.operators[node.op.__class__]}',
                         'l_value': self.get_value(node.value, variables_names, variables)}
             else:
                 raise
+        elif isinstance(node, _ast.NameConstant):
+            # True - False
+            return node.value
         else:
             print("new type",
                   node,
                   node.__dict__)
             raise
+
+    @staticmethod
+    def reverse_condition(statement: Dict) -> Dict:
+        not_statement = deepcopy(statement)
+        # change to opposite in pair != to == > to <= and etc
+        not_statement['ops'] = meta.ops_pairs[not_statement['ops']]
+        # mean that this is reversed from previous strategy,
+        # we don't need to reverse it in next strategies
+        not_statement['previous'] = True
+        return not_statement
+
+    def get_reversed_previous_statement(self, previous_statement: List) -> List:
+        """ iterate other conditions in strategy and reverse
+            them if they are was not not reversed previous """
+        not_previous_statement = []
+        for statement in previous_statement:
+            if 'previous' not in statement:
+                not_previous_statement.append(self.reverse_condition(statement))
+            else:
+                not_previous_statement.append(statement)
+        return not_previous_statement
+
+    def form_strategies(self, func_data: Dict) -> Dict:
+        # TODO: need to add strategies for depend_on args - when arg match to expected value and when not
+        s = []
+        if not func_data.get('ifs'):
+            s.append(StrategyAny())
+        else:
+            for num, condition in enumerate(func_data['ifs']):
+                # for every next if after if with 0 number we add rule not previous rule
+                if num != 0:
+                    previous_statement = func_data['ifs'][num - 1]
+                    condition += self.get_reversed_previous_statement(previous_statement)
+                s.append(condition)
+            # now add last strategy, that exclude all previous strategies
+            s.append(self.get_reversed_previous_statement(s[-1]))
+        func_data['s'] = s
+        return func_data
 
     def get_attr_call_line(self, node: _ast.Attribute) -> Text:
         line = self.source[node.lineno-1][node.col_offset:]
@@ -414,7 +458,8 @@ class Analyzer(ast.NodeVisitor):
             attr_call = node.attr
         return attr_call
 
-    def identify_type_by_attr(self, inner_function_arg, func, variables, variables_names):
+    def identify_type_by_attr(self, inner_function_arg: Union[Dict, Any],
+                              func: Dict, variables: List, variables_names: Dict) -> None:
         # arg - l_value for attrib in function
         # TODO: add check for args in variables, split method
         import jedi
@@ -433,21 +478,23 @@ class Analyzer(ast.NodeVisitor):
         if not arg_type:
             arg_type = self.set_type_by_attrib(arg, attrib=attrib)
         init_arg_line = f'{arg} = {arg_type.__name__}(); '
+        # get method complition
         line = f'{init_arg_line}{arg}.' + attrib
         line = line[:-1]
         script = jedi.Script(line)
         completions = script.complete(1, len(line))
+        # get params names
         first_param = [x for x in get_signature_param_names([completions[0]])][0]
         line = line.split('.')[0] + '.' + completions[0].name + '(' + str(first_param.get_public_name())
         line = line[:-1]
         script = jedi.Script(line)
+        # get paramas details - types
         completions = script.complete(1, len(line))
         split_line = jedi_param_type_line.format(param_name=first_param.get_public_name()[:-1])
         split_description = completions[0].description.split(split_line)
         complete_type = split_description[1]
         self.set_type_to_func_args(inner_function_arg, complete_type)
         self.set_dependency_to_arg(inner_function_arg, arg)
-        return completions
 
     def set_dependency_to_arg(self, arg: Text, dependency_arg: Text):
         """

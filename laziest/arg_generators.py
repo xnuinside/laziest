@@ -27,7 +27,7 @@ def str_generator():
 
 
 def int_generator():
-    return randint(0, 15)
+    return randint(1, 15)
 
 
 def float_generator():
