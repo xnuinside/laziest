@@ -106,8 +106,6 @@ class Analyzer(ast.NodeVisitor):
         :return:
         """
         # local variables, assign statements in function body
-        for node_ in node.body:
-            print(node_.__dict__)
         variables = [node for node in node.body if isinstance(node, ast.Assign)
                      if node.targets[0].id not in self.func_data['args']]
         variables_names = {}
