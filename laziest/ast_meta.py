@@ -13,9 +13,23 @@ simple = [_ast.Str, _ast.Num]
 data_types = [x for x in iterated.keys()] + simple
 
 
+ops_pairs = {
+    '==': '!=',
+    '>': '<=',
+    '>=': '<',
+    '!=': '==',
+    '<=': '>',
+    '<': '>=',
+    'not': '',
+    '': 'not'
+}
+
 operators = {
     _ast.Eq: '==',
+    _ast.GtE: '>=',
     _ast.Gt: '>',
+    _ast.LtE: '<=',
+    _ast.Lt: '<',
     _ast.Div: '/',
     _ast.Mult: '*',
     _ast.Add: '+',
