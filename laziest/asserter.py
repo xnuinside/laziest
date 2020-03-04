@@ -97,7 +97,7 @@ class Asserter:
                 err_message = rp_result['comment']
             elif 'func' in return_pack['result']:
                 _return_value, random = self.run_function_several_times(
-                    rp_result['func'], pack_param_strategy)
+                    rp_result, pack_param_strategy)
                 if random:
                     random_values.append(random)
             elif return_pack.get('args') or rp_result.get('args'):
@@ -164,18 +164,20 @@ class Asserter:
         return arg
 
     def prepare_attrib_function_call_to_eval(self, statement: Dict) -> Tuple:
+        # TODO: very weird method
         _import = None
-        while isinstance(statement, dict):
-            if not isinstance(statement.get('value', {}), dict):
-                _load = self.func_data[statement['t']].get(statement['value'])
-                if statement['t'] == 'import':
+        _statement = deepcopy(statement)
+        while isinstance(_statement, dict):
+            if not isinstance(_statement.get('value', {}), dict):
+                _load = self.func_data[_statement['t']].get(_statement['value'])
+                if _statement['t'] == 'import':
                     if _load in globals()['__builtin__']:
                         raise
 
             for key in ['l_value', 'func']:
                 # logic for attribute functions calls
-                if key in statement:
-                    _statement = statement[key]
+                if key in _statement:
+                    _statement = _statement[key]
                     if 'l_value' in _statement and 'attr' in _statement['l_value']:
                         _statement['l_value']['attr'] = _statement['l_value']['attr'] + '.' + statement.get('attr', '')
                         _statement = _statement['l_value']
@@ -186,13 +188,18 @@ class Asserter:
                         statement = _statement['func']
                     elif 'l_value' not in _statement:
                         _statement = f'{_statement["args"]}.{statement["attr"]}'
+
                     elif 't' in _statement['l_value']:
                         # we found start object
                         _import = _statement['l_value']['value']
                         _statement = _statement['l_value']['value'] + '.' + _statement.get('attr')
-            statement = _statement
-
-        return statement, _import
+        print(statement)
+        if '()' not in _statement:
+            if not statement.get('args'):
+                _statement = _statement + '()'
+            else:
+                _statement = _statement + f'({statement["args"]})'
+        return _statement, _import
 
     def run_function_several_times(self, statement: Dict, pack_param_strategy: Dict):
         """
@@ -215,6 +222,7 @@ class Asserter:
         results = []
         if _import:
             globals()[_import] = __import__(_import, _import)
+        print(statement)
         for i in range(0, 2):
             results.append(eval(statement, globals().update(deepcopy(pack_param_strategy))))
         if results[0] != results[1]:

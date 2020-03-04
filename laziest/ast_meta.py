@@ -21,7 +21,9 @@ ops_pairs = {
     '<=': '>',
     '<': '>=',
     'not': '',
-    '': 'not'
+    '': 'not',
+    'in': 'not in',
+    'not in': 'in'
 }
 
 operators = {

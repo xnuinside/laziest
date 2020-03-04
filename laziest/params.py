@@ -4,7 +4,7 @@ from random import randint
 from collections import defaultdict
 from collections.abc import Iterable
 # TODO: temporary, after need to integrate with hypothesis or smth else to generate valuse
-from laziest.arg_generators import map_types
+from laziest.argsgen import map_types, map_types_in_range, map_types_include
 from laziest.utils import get_value_name, is_int
 no_default = 'no_default'
 
@@ -14,7 +14,7 @@ cls_reserved_args = ['self', 'cls']
 def generate_params_based_on_strategy(args: Dict, func_data: Dict, strategies=None, base_params=None):
     if strategies and base_params:
         # we have a functions with ifs
-        params = generate_value_in_borders(strategies, args, base_params)
+        params = generate_value_in_borders(strategies, args, base_params, func_data)
     else:
         params = deepcopy(args)
         params = gen_params(func_data['args'], func_data['keys'], params)
@@ -88,7 +88,7 @@ def add_border_to_arg(args_borders: Dict, arg_name: Text, value: Any, border: Te
         need to add changes to strategies also
     """
     if not args_borders.get(arg_name):
-        args_borders[arg_name] = {'left': [], 'right': [], 'exclude': []}
+        args_borders[arg_name] = {'left': [], 'right': [], 'exclude': [], 'include': []}
 
         if _slice:
             args_borders[arg_name]['slice'] = defaultdict(dict)
@@ -115,6 +115,18 @@ def set_slice_value(_object: Union[Iterable, List, Dict], _slice: Union[int, str
     return _object
 
 
+def get_side_of_argument(statement: Dict) -> Text:
+    _statement = deepcopy(statement)
+    print(_statement)
+    for side in ['left', 'comparators']:
+        if isinstance(_statement[side], Iterable):
+            if 'arg' in _statement[side]:
+                _statement[side] = _statement[side]['arg']
+            if 'args' in _statement[side]:
+                # TODO: need to work around correct case when one arg compared to another
+                return side
+
+
 def extract_border_values(strategies, args):
 
     sides = {
@@ -123,37 +135,40 @@ def extract_border_values(strategies, args):
         '!=': 'exclude',
         '<=': 'right',  # TODO: need also include an edge value, same for >=
         '>=': 'left',
+        'in': 'include',
+        'not in': 'exclude'
+    }
+
+    opposite_side = {
+        'left': 'comparators',
+        'comparators': 'left'
     }
     args_borders = defaultdict(dict)
     for statement in strategies:
-        _arg_name, _slice = get_value_name(statement['left'], separate_slice=True)
+        arg_side = get_side_of_argument(statement)
+        _arg_name, _slice = get_value_name(statement[arg_side], separate_slice=True)
         if statement['ops'] == '==':
             if not _slice:
-                args[_arg_name] = statement['comparators']
+                args[_arg_name] = statement[opposite_side[arg_side]]
             else:
-                args[_arg_name] = set_slice_value(args[_arg_name], _slice,  statement['comparators'])
+                args[_arg_name] = set_slice_value(args[_arg_name], _slice,  statement[opposite_side[arg_side]])
 
         else:
             if not _slice:
-                args_borders = add_border_to_arg(args_borders, _arg_name, statement['comparators'],
+                args_borders = add_border_to_arg(args_borders, _arg_name, statement[opposite_side[arg_side]],
                                                  sides[statement['ops']])
             else:
-                args_borders = add_border_to_arg(args_borders, _arg_name, statement['comparators'],
+                args_borders = add_border_to_arg(args_borders, _arg_name, statement[opposite_side[arg_side]],
                                                  sides[statement['ops']], _slice=_slice)
     return args_borders
 
 
-def generate_in_range(left_border, right_border):
-    generate_values = [randint(left_border, right_border) for _ in range(0, 3)]
-
-    return generate_values
-
-
-def create_value_in_border_per_arg(arg_borders):
+def create_value_in_border_per_arg(arg_type: Any, arg_borders: Dict, _slice=False) -> Any:
     """
         arg_borders = {'left_border': ,
                         'right_borders': ,
                         'exclude': ..}
+    :param arg_type:
     :param arg_borders:
     :return:
     """
@@ -168,12 +183,17 @@ def create_value_in_border_per_arg(arg_borders):
     else:
         right_border = default_value
     exclude = arg_borders['exclude']
-    if left_border is not default_value or right_border is not default_value:
+    include = arg_borders['include']
+    print(arg_type)
+    print(arg_borders)
+    if _slice:
+        arg_type = int
+    if left_border != -default_value or right_border != default_value:
         # we have int or float
         value = None
         n = 0
         while not value and n != 3:
-            values = generate_in_range(left_border, right_border)
+            values = map_types_in_range(arg_type, left_border, right_border)
             for val in values:
                 if exclude:
                     for ex_val in exclude:
@@ -183,6 +203,11 @@ def create_value_in_border_per_arg(arg_borders):
                     return val
             else:
                 n += 1
+
+    elif exclude or include:
+        return map_types_include(arg_type, include, exclude)
+    else:
+        raise
 
 
 def prepare_args(args):
@@ -207,28 +232,29 @@ def prepare_args(args):
     return args
 
 
-def generate_value_in_borders(strategies: List, args: Dict, all_function_args: Dict):
+def generate_value_in_borders(strategies: List, args: Dict, base_params: Dict, func_data: Dict):
     """
         generate values if exist previous borders (statemnts) from 'ifs'
     :param strategies:
     :param args:
-    :param all_function_args:
+    :param base_params:
     :return:
     """
-    if all_function_args is None:
-        all_function_args = {}
+    if base_params is None:
+        base_params = {}
     # borders from strategies
-    for arg in all_function_args:
+    for arg in base_params:
         if arg not in args:
-            args[arg] = all_function_args[arg]
+            args[arg] = base_params[arg]
     args = prepare_args(args)
     args_borders = extract_border_values(strategies, args)
     for arg in args_borders:
         if 'slice' in args_borders[arg]:
             for slice_ in args_borders[arg]['slice']:
-                _value = create_value_in_border_per_arg(args_borders[arg]['slice'][slice_])
+                _value = create_value_in_border_per_arg(
+                    func_data['args'][arg]['type'], args_borders[arg]['slice'][slice_], _slice=True)
                 set_slice_value(args[arg], slice_, _value)
         else:
-            _value = create_value_in_border_per_arg(args_borders[arg])
+            _value = create_value_in_border_per_arg(func_data['args'][arg]['type'], args_borders[arg])
             args[arg] = _value
     return args

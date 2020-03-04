@@ -64,10 +64,9 @@ class Analyzer(ast.NodeVisitor):
                 value = value['args']
         return value
 
-    def process_if_construction(
-            self, statement: _ast.If, func_data: Dict,
-            variables_names: Dict, variables: List,
-            previous_statements: List = None):
+    def process_if_construction(self, statement: _ast.If, func_data: Dict,
+                                variables_names: Dict, variables: List,
+                                previous_statements: List = None):
         if previous_statements is None:
             previous_statements = []
         # we get variables from statement
@@ -75,8 +74,8 @@ class Analyzer(ast.NodeVisitor):
         # we work with args from statements
         args = {}
         # list because if will be multiple values - it cannot be one rule in dict
-        previous_statements.append([value])
         # TODO: need to add support of multiple statements in one condition
+        previous_statements.append([value])
         _value = self.get_operand_value(value['left'])
         if value['ops'] == '==':
             args = {_value: value['comparators']}
@@ -88,7 +87,8 @@ class Analyzer(ast.NodeVisitor):
         if 'print' in result:
             result = result['print']['text'].strip()
         func_data['return'].append({'args': args, 'result': result})
-        func_data['return'][index]['log'] = True
+        if 'print':
+            func_data['return'][index]['log'] = True
         for orelse in statement.orelse:
             if isinstance(orelse, _ast.If):
                 func_data = self.process_if_construction(
@@ -450,12 +450,12 @@ class Analyzer(ast.NodeVisitor):
 
     def get_attr_call_line(self, node: _ast.Attribute) -> Text:
         line = self.source[node.lineno-1][node.col_offset:]
-        _call = line.split(node.attr)[1].split()[0].replace(',', '')
-        if '.' not in _call:
-            # mean we have a chain like .uuid().hex
-            attr_call = node.attr + _call
-        else:
-            attr_call = node.attr
+        _call = ''
+        # line after attr
+        split_by_attr = line.split(node.attr)[1]
+        if split_by_attr.startswith('.'):
+            _call = split_by_attr.split(',')[0]
+        attr_call = node.attr + _call
         return attr_call
 
     def identify_type_by_attr(self, inner_function_arg: Union[Dict, Any],
@@ -474,7 +474,7 @@ class Analyzer(ast.NodeVisitor):
                         arg_type = func_arg_type
                 else:
                     arg_type = func_arg_type
-        attrib = func["attr"].split('(')[0]
+        attrib = func["attr"]
         if not arg_type:
             arg_type = self.set_type_by_attrib(arg, attrib=attrib)
         init_arg_line = f'{arg} = {arg_type.__name__}(); '
