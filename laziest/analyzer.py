@@ -87,7 +87,7 @@ class Analyzer(ast.NodeVisitor):
         if 'print' in result:
             result = result['print']['text'].strip()
         func_data['return'].append({'args': args, 'result': result})
-        if 'print':
+        if 'print' in result:
             func_data['return'][index]['log'] = True
         for orelse in statement.orelse:
             if isinstance(orelse, _ast.If):
@@ -158,12 +158,15 @@ class Analyzer(ast.NodeVisitor):
                 elif isinstance(body_item, _ast.Pass):
                     continue
                 else:
+                    print(body_item)
+                    print(body_item.__dict__)
                     raise
             for result in func_data['return']:
                 result = result['result']
-                if isinstance(result, dict) and 'func' in result:
-                    arg = result['args']
-                    if not isinstance(arg, dict) and arg in self.func_data['args']:
+                if isinstance(result, dict) and 'func' in result and isinstance(result['args'], dict):
+                    # function args
+                    arg = result['args'].get('args')
+                    if arg:
                         # mean in function we use upper function argument
                         self.identify_type_by_attr(arg, result['func'], variables, variables_names)
 
@@ -348,7 +351,7 @@ class Analyzer(ast.NodeVisitor):
                         return eval("{}({})".format(node.func.id, ", ".join(args)))
             else:
                 if node.args:
-                    arg = self.get_value(node.args[0])['args']
+                    arg = self.get_value(node.args[0])
                 else:
                     arg = {}
                 func = self.get_value(node.func)
@@ -404,6 +407,11 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.NameConstant):
             # True - False
             return node.value
+        elif isinstance(node, _ast.In):
+            # True - False
+            return 'in'
+        elif isinstance(node, _ast.NotIn):
+            return 'not in'
         else:
             print("new type",
                   node,

@@ -3,7 +3,7 @@ def include_symbol_in_str(chunk):
         key, _ = chunk.split('=', 1)
         return key
 
-
+"""
 def include_symbol_in_str_tuple(chunk):
     if '=' in chunk:
         key, val = chunk.split('=', 1)
@@ -22,3 +22,4 @@ def include_list_of_symbols_in_str_tuple(chunk):
         if symbol in chunk:
             key, val = chunk.split('=', 1)
             return key, val
+"""

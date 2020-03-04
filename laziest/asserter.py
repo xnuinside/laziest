@@ -198,7 +198,12 @@ class Asserter:
             if not statement.get('args'):
                 _statement = _statement + '()'
             else:
-                _statement = _statement + f'({statement["args"]})'
+                if isinstance(statement["args"], dict) and 'args' in statement["args"]:
+                    # mean function arg used in
+                    args = statement["args"]["args"]
+                else:
+                    args = f'\'{statement["args"]}\''
+                _statement = _statement + f'({args})'
         return _statement, _import
 
     def run_function_several_times(self, statement: Dict, pack_param_strategy: Dict):
