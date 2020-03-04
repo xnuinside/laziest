@@ -193,7 +193,6 @@ class Asserter:
                         # we found start object
                         _import = _statement['l_value']['value']
                         _statement = _statement['l_value']['value'] + '.' + _statement.get('attr')
-        print(statement)
         if '()' not in _statement:
             if not statement.get('args'):
                 _statement = _statement + '()'
@@ -227,7 +226,6 @@ class Asserter:
         results = []
         if _import:
             globals()[_import] = __import__(_import, _import)
-        print(statement)
         for i in range(0, 2):
             results.append(eval(statement, globals().update(deepcopy(pack_param_strategy))))
         if results[0] != results[1]:

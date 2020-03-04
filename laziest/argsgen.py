@@ -1,9 +1,9 @@
 # TODO: temporary, after need to integrate with hypothesis or smth else to generate values
-from typing import Dict, Text, List, Union, Any
+from typing import Dict, Text, List, Union
 from random import random, randint, choice
 
 
-def map_types_in_range(_type, left_border, right_border, _slice=None):
+def map_types_in_range(_type, left_border: int, right_border: int, _slice: Union[int, Text] = None):
     if _slice:
         return int_generator(left_border, right_border)
     if _type == {'No type': True} or _type == int:

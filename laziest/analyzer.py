@@ -83,12 +83,13 @@ class Analyzer(ast.NodeVisitor):
             self.set_type_to_func_args(value['left'], type(value['comparators']))
             args = {_value: value['comparators'] + randint(1, 100)}
         result = self.get_value(statement.body[0])
-        index = len(func_data['return'])
         if 'print' in result:
             result = result['print']['text'].strip()
-        func_data['return'].append({'args': args, 'result': result})
-        if 'print' in result:
-            func_data['return'][index]['log'] = True
+        return_pack = {'args': args, 'result': result}
+        if '\'' in result:
+            # TODO: this is a hack, need to normalize it
+            return_pack['log'] = True
+        func_data['return'].append(return_pack)
         for orelse in statement.orelse:
             if isinstance(orelse, _ast.If):
                 func_data = self.process_if_construction(
