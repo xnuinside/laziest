@@ -153,9 +153,22 @@ class Asserter:
     def eval_steps_in_order(self, arg_name: Text, params: Dict) -> Any:
         steps = self.func_data['steps'][arg_name]
         arg = params[arg_name]
+        if isinstance(arg,  str):
+            arg = f'\'{arg}\''
+        print(arg)
         for step in steps:
+
+            print(step)
             if 'BinOp' not in step:
-                eval_line = f'{arg}{step["op"]}{step["l_value"]}'
+                if 'op' in step:
+                    eval_line = f'{arg}{step["op"]}{step["l_value"]}'
+                elif 'func' in step:
+                    eval_line, _import = self.prepare_attrib_function_call_to_eval(step)
+                    if _import:
+                        globals()[_import] = __import__(_import, _import)
+                    eval_line = eval_line.replace(arg_name, arg)
+                else:
+                    raise Exception(f"New step: {step}")
                 arg = eval(eval_line)
             else:
                 _params = deepcopy(params)

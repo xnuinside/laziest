@@ -99,6 +99,14 @@ class Analyzer(ast.NodeVisitor):
         func_data['ifs'] = previous_statements
         return func_data
 
+    @staticmethod
+    def separate_assing_nodes(node: _ast.Assign):
+        tuple_key = meta.values_for_ast_type[type(node.targets[0])]
+        for num, inner_node in enumerate(getattr(node.targets[0], tuple_key)):
+            inner_value = getattr(node.value, tuple_key)[num]
+            var = _ast.Assign(targets=[inner_node], value=inner_value)
+            yield var
+
     def extract_variables_in_scope(self, node: ast.FunctionDef):
 
         """
@@ -106,9 +114,25 @@ class Analyzer(ast.NodeVisitor):
         :param node:
         :return:
         """
+        print(node.__dict__)
+        print(node)
         # local variables, assign statements in function body
-        variables = [node for node in node.body if isinstance(node, ast.Assign)
-                     if node.targets[0].id not in self.func_data['args']]
+        # variables 'id' -> Name node, 'value' -> Node
+        variables = []
+        processed_multiply_nodes = []
+        for node in node.body:
+            if isinstance(node, ast.Assign):
+                if getattr(node.targets[0], 'id', None) and node.targets[0].id not in self.func_data['args']:
+                    # for single assignments var2 = 1
+                    variables.append(node)
+                elif isinstance(node.targets[0], _ast.Tuple):
+                    # in one Assign node can be several targets and values, like var1, var2 = 1, 2 (multi assign)
+                    for var in self.separate_assing_nodes(node):
+                        if var.targets[0].id not in self.func_data['args']:
+                            variables.append(var)
+                            if node not in processed_multiply_nodes:
+                                processed_multiply_nodes.append(node)
+        print(processed_multiply_nodes)
         variables_names = {}
         if variables:
             # define code variables in dict
@@ -118,7 +142,7 @@ class Analyzer(ast.NodeVisitor):
         self.variables = variables
         self.variables_names = deepcopy(variables_names)
         self.func_data['variables'] = self.variables
-        return variables, variables_names
+        return variables, variables_names, processed_multiply_nodes
 
     def function_data_base(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], async_f: bool) -> Dict:
         """
@@ -141,8 +165,9 @@ class Analyzer(ast.NodeVisitor):
         """ main methods to """
         try:
             func_data = self.function_data_base(node, async_f)
-            variables, variables_names = self.extract_variables_in_scope(node)
-            non_variables_nodes_bodies = [node for node in node.body if node not in variables]
+            variables, variables_names, processed_multiply_nodes = self.extract_variables_in_scope(node)
+            non_variables_nodes_bodies = [node for node in node.body
+                                          if node not in variables and node not in processed_multiply_nodes]
             for body_item in non_variables_nodes_bodies:
                 if isinstance(body_item, ast.Return):
                     return_ = {'result': self.get_value(body_item.value, variables_names, variables)}
@@ -153,9 +178,13 @@ class Analyzer(ast.NodeVisitor):
                 elif getattr(body_item, 'target', None) and body_item.target.id in func_data['args']:
                     # operations like arg_1 *= 10
                     self.add_step_for_arg(body_item, variables_names, variables)
-                elif getattr(body_item, 'targets', None) and body_item.targets[0].id in func_data['args']:
-                    # operations like arg_1 *= 10
-                    self.add_step_for_arg(body_item, variables_names, variables)
+                elif getattr(body_item, 'targets', None):
+                    if getattr(body_item.targets[0], 'id', None) and body_item.targets[0].id in func_data['args']:
+                        # operations like arg_1 *= 10
+                        self.add_step_for_arg(body_item, variables_names, variables)
+                    elif isinstance(body_item, _ast.Tuple):
+                        for node in self.separate_assing_nodes(body_item):
+                            self.add_step_for_arg(node, variables_names, variables)
                 elif isinstance(body_item, _ast.Pass):
                     continue
                 else:
