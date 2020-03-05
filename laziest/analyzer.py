@@ -182,9 +182,9 @@ class Analyzer(ast.NodeVisitor):
                     if getattr(body_item.targets[0], 'id', None) and body_item.targets[0].id in func_data['args']:
                         # operations like arg_1 *= 10
                         self.add_step_for_arg(body_item, variables_names, variables)
-                    elif isinstance(body_item, _ast.Tuple):
-                        for node in self.separate_assing_nodes(body_item):
-                            self.add_step_for_arg(node, variables_names, variables)
+                    elif isinstance(body_item.targets[0], _ast.Tuple):
+                        for inner_node in self.separate_assing_nodes(body_item):
+                            self.add_step_for_arg(inner_node, variables_names, variables)
                 elif isinstance(body_item, _ast.Pass):
                     continue
                 else:
@@ -227,7 +227,11 @@ class Analyzer(ast.NodeVisitor):
             arg = node.targets[0].id
         if arg not in self.func_data['steps']:
             self.func_data['steps'][arg] = []
-        self.func_data['steps'][arg].append(self.get_value(node, variables_names, variables))
+        step = self.get_value(node, variables_names, variables)
+        print(step, 'step')
+        if 'func' in step:
+            self.set_type_by_attrib(arg, step['func']['attr'])
+        self.func_data['steps'][arg].append(step)
 
     def set_slices_to_func_args(self, arg: Text, _slice: Union[Text, int]):
 
@@ -304,6 +308,7 @@ class Analyzer(ast.NodeVisitor):
         :return:
         """
         node_type = node.__class__
+        print(node.__dict__)
         if not variables:
             variables = self.variables or []
         if not variables_names:

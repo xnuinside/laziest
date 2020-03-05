@@ -155,10 +155,7 @@ class Asserter:
         arg = params[arg_name]
         if isinstance(arg,  str):
             arg = f'\'{arg}\''
-        print(arg)
         for step in steps:
-
-            print(step)
             if 'BinOp' not in step:
                 if 'op' in step:
                     eval_line = f'{arg}{step["op"]}{step["l_value"]}'
