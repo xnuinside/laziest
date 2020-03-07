@@ -11,8 +11,6 @@ from random import randint
 pytest_needed = False
 jedi_param_type_line = 'param {param_name}: '
 
-no_type_value = 'No type'
-
 
 class StrategyAny:
     pass
@@ -80,7 +78,6 @@ class Analyzer(ast.NodeVisitor):
         if value['ops'] == '==':
             args = {_value: value['comparators']}
         elif value['ops'] == '>':
-            self.set_type_to_func_args(value['left'], type(value['comparators']))
             args = {_value: value['comparators'] + randint(1, 100)}
         result = self.get_value(statement.body[0])
         if 'print' in result:
@@ -114,12 +111,9 @@ class Analyzer(ast.NodeVisitor):
         :param node:
         :return:
         """
-        print(node.__dict__)
-        print(node)
         # local variables, assign statements in function body
         # variables 'id' -> Name node, 'value' -> Node
         variables = []
-        processed_multiply_nodes = []
         for node in node.body:
             if isinstance(node, ast.Assign):
                 if getattr(node.targets[0], 'id', None) and node.targets[0].id not in self.func_data['args']:
@@ -130,9 +124,6 @@ class Analyzer(ast.NodeVisitor):
                     for var in self.separate_assing_nodes(node):
                         if var.targets[0].id not in self.func_data['args']:
                             variables.append(var)
-                            if node not in processed_multiply_nodes:
-                                processed_multiply_nodes.append(node)
-        print(processed_multiply_nodes)
         variables_names = {}
         if variables:
             # define code variables in dict
@@ -142,7 +133,40 @@ class Analyzer(ast.NodeVisitor):
         self.variables = variables
         self.variables_names = deepcopy(variables_names)
         self.func_data['variables'] = self.variables
-        return variables, variables_names, processed_multiply_nodes
+        return variables, variables_names
+
+    def check_arg_in_assing_node(self, node: _ast.Assign):
+        # need find if arg used in some variable (in right sight) or maybe modified with same name - to find steps
+        if getattr(node, 'target', None) and node.target.id in self.func_data['args']:
+            # case when function arg in left side like arg = some_value
+            return True
+        elif getattr(node, 'targets', None) and getattr(node.targets[0], 'id', None) \
+                and node.targets[0].id in self.func_data['args']:
+            # operations like arg_1 *= 10
+            # if at the left function arg name
+            return True
+
+    def process_body_node(self, node: Any, variables_names, variables):
+        if isinstance(node, ast.Return):
+            return_ = {'result': self.get_value(node.value, variables_names, variables)}
+            self.func_data['return'].append(return_)
+        elif isinstance(node, _ast.If):
+            self.func_data = self.process_if_construction(
+                node, self.func_data, variables_names, variables)
+        elif self.check_arg_in_assing_node(node):
+            # operations like arg_1 *= 10
+            self.add_step_for_arg(node, variables_names, variables)
+        elif getattr(node, 'targets', None) and isinstance(node.targets[0], _ast.Tuple):
+            for inner_node in self.separate_assing_nodes(node):
+                if self.check_arg_in_assing_node(node):
+                    # if at the left function arg name
+                    self.add_step_for_arg(inner_node, variables_names, variables)
+        elif isinstance(node, _ast.Pass):
+            return
+        else:
+            print(node)
+            print(node.__dict__)
+            raise
 
     def function_data_base(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], async_f: bool) -> Dict:
         """
@@ -165,38 +189,17 @@ class Analyzer(ast.NodeVisitor):
         """ main methods to """
         try:
             func_data = self.function_data_base(node, async_f)
-            variables, variables_names, processed_multiply_nodes = self.extract_variables_in_scope(node)
-            non_variables_nodes_bodies = [node for node in node.body
-                                          if node not in variables and node not in processed_multiply_nodes]
+            variables, variables_names = self.extract_variables_in_scope(node)
+            non_variables_nodes_bodies = [node for node in node.body if node not in variables]
             for body_item in non_variables_nodes_bodies:
-                if isinstance(body_item, ast.Return):
-                    return_ = {'result': self.get_value(body_item.value, variables_names, variables)}
-                    func_data['return'].append(return_)
-                elif isinstance(body_item, _ast.If):
-                    func_data = self.process_if_construction(
-                        body_item, self.func_data, variables_names, variables)
-                elif getattr(body_item, 'target', None) and body_item.target.id in func_data['args']:
-                    # operations like arg_1 *= 10
-                    self.add_step_for_arg(body_item, variables_names, variables)
-                elif getattr(body_item, 'targets', None):
-                    if getattr(body_item.targets[0], 'id', None) and body_item.targets[0].id in func_data['args']:
-                        # operations like arg_1 *= 10
-                        self.add_step_for_arg(body_item, variables_names, variables)
-                    elif isinstance(body_item.targets[0], _ast.Tuple):
-                        for inner_node in self.separate_assing_nodes(body_item):
-                            self.add_step_for_arg(inner_node, variables_names, variables)
-                elif isinstance(body_item, _ast.Pass):
-                    continue
-                else:
-                    print(body_item)
-                    print(body_item.__dict__)
-                    raise
+                self.process_body_node(body_item, variables_names, variables)
             for result in func_data['return']:
                 result = result['result']
-                if isinstance(result, dict) and 'func' in result and isinstance(result['args'], dict):
-                    # function args
-                    arg = result['args'].get('args')
-                    if arg:
+                if isinstance(result, dict) and 'func' in result:
+                    arg = result['args']
+                    if isinstance(arg, dict) and 'args' in arg:
+                        arg = arg['args']
+                    if not isinstance(arg, dict) and arg in self.func_data['args']:
                         # mean in function we use upper function argument
                         self.identify_type_by_attr(arg, result['func'], variables, variables_names)
 
@@ -221,6 +224,8 @@ class Analyzer(ast.NodeVisitor):
         self.tree['raises'].append(node.exc.__dict__)
 
     def add_step_for_arg(self, node, variables_names, variables):
+        print('step')
+        print(node.__dict__)
         if getattr(node, 'target', None):
             arg = node.target.id
         elif getattr(node, 'targets', None):
@@ -228,8 +233,7 @@ class Analyzer(ast.NodeVisitor):
         if arg not in self.func_data['steps']:
             self.func_data['steps'][arg] = []
         step = self.get_value(node, variables_names, variables)
-        print(step, 'step')
-        if 'func' in step:
+        if isinstance(step, dict) and 'func' in step:
             self.set_type_by_attrib(arg, step['func']['attr'])
         self.func_data['steps'][arg].append(step)
 
@@ -308,7 +312,6 @@ class Analyzer(ast.NodeVisitor):
         :return:
         """
         node_type = node.__class__
-        print(node.__dict__)
         if not variables:
             variables = self.variables or []
         if not variables_names:
@@ -396,6 +399,10 @@ class Analyzer(ast.NodeVisitor):
             result = {'left': self.get_value(node.left, variables_names, variables),
                       'ops': self.get_value(node.ops[0], variables_names, variables),
                       'comparators': self.get_value(node.comparators[0], variables_names, variables)}
+            if 'args' in result['left']:
+                # TODO: need to change this, because one arg can be several diff types for diff result
+                self.set_type_to_func_args(result['left']['args'],
+                                           type(result['comparators']))
             return result
         elif type(node) in meta.operators:
             return meta.operators[type(node)]
@@ -431,7 +438,7 @@ class Analyzer(ast.NodeVisitor):
             # TODO: need to modify type set, can be str also
             if not self.func_data['args'][arg['args']].get('type') or (
                     isinstance(self.func_data['args'][arg['args']]['type'], dict)
-                    and no_type_value in self.func_data['args'][arg['args']]['type']):
+                    and self.func_data['args'][arg['args']]['type'] is None):
                 self.set_type_to_func_args(arg['args'], int)
             if 'args' in arg:
                 return {'arg': arg,
@@ -513,7 +520,7 @@ class Analyzer(ast.NodeVisitor):
             func_arg_type = self.func_data['args'][arg].get('type', None)
             if func_arg_type:
                 if isinstance(func_arg_type, dict):
-                    if not func_arg_type.get(no_type_value):
+                    if not func_arg_type:
                         arg_type = func_arg_type
                 else:
                     arg_type = func_arg_type
@@ -624,10 +631,11 @@ class Analyzer(ast.NodeVisitor):
         """ try to get types form node
         :param body_item:
         """
+        # TODO: need change this to jedi
         doc = ast.get_docstring(body_item)
-        doc_types = {}
+        doc_types = None
         if not doc or 'type' not in doc:
-            doc_types[no_type_value] = True
+            doc_types = None
         else:
             for arg in body_item.args.args:
                 print('type', arg.arg, doc.split(arg.arg))

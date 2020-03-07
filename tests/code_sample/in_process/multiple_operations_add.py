@@ -1,3 +1,9 @@
+
+def multiple_assigments_per_line_attr_calls(key, val):
+    key, val = key.strip(), val.strip()
+    return key, val
+
+
 def multiple_assigment_per_line_attr_calls_one_return(key, val):
     key, _ = key.strip(), val.strip()
     return key
