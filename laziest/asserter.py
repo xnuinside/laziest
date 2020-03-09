@@ -65,7 +65,15 @@ class Asserter:
             pack_result = None
             result_value = []
             for elem in rp_result:
+
+                if list(elem.keys()) == ['args']:
+                    if isinstance(elem, dict) and 'args' in elem and elem['args'] and \
+                            elem['args'] in self.func_data['steps']:
+
+                        result_value.append(self.eval_steps_in_order(elem['args'], pack_param_strategy))
+                        continue
                 if isinstance(elem, Iterable) and 'BinOp' in elem:
+                    # TODO: not sure about this part
                     pack_result = self.get_assert_for_params(return_pack, pack_param_strategy)['result']
                     if 'error' in pack_result:
                         # if we have exception
@@ -76,10 +84,19 @@ class Asserter:
                         result_value.append(pack_result)
                     break
                 else:
-                    if not pack_result and isinstance(elem, dict) and 'args' in elem:
-                        result_value.append(pack_param_strategy[elem['args']])
+                    if not pack_result and isinstance(elem, dict):
+                        if 'func' in elem:
+                            result, random = self.run_function_several_times(elem, pack_param_strategy)
+                            if random:
+                                random_values.append(random)
+                            else:
+                                result_value.append(result)
+                        elif 'args' in elem:
+                            result_value.append(pack_param_strategy[elem['args']])
+                        else:
+                            result_value.append(elem)
                     else:
-                        result_value.append(elem)
+                        result_value.append(pack_result)
             if len(result_value) == 1:
                 _return_value = result_value[0]
             else:
@@ -156,6 +173,7 @@ class Asserter:
         if isinstance(arg,  str):
             arg = f'\'{arg}\''
         for step in steps:
+            step = step['step']
             if 'BinOp' not in step:
                 if 'op' in step:
                     eval_line = f'{arg}{step["op"]}{step["l_value"]}'
