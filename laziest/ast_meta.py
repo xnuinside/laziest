@@ -12,6 +12,7 @@ simple = [_ast.Str, _ast.Num]
 
 data_types = [x for x in iterated.keys()] + simple
 
+simple_types = [str, int, float]
 
 ops_pairs = {
     '==': '!=',

@@ -2,7 +2,7 @@
 import ast
 import _ast
 from copy import deepcopy
-from typing import Any, Text, Dict, Union, List
+from typing import Any, Text, Dict, Union, List, Tuple
 from pprint import pprint
 from collections import defaultdict, OrderedDict
 from laziest import ast_meta as meta
@@ -135,32 +135,60 @@ class Analyzer(ast.NodeVisitor):
         self.func_data['variables'] = self.variables
         return variables, variables_names
 
-    def check_arg_in_assing_node(self, node: _ast.Assign):
+    def check_arg_in_assing_node(self, node: _ast.Assign) -> Tuple[bool, bool]:
         # need find if arg used in some variable (in right sight) or maybe modified with same name - to find steps
-        if getattr(node, 'target', None) and node.target.id in self.func_data['args']:
-            # case when function arg in left side like arg = some_value
-            return True
-        elif getattr(node, 'targets', None) and getattr(node.targets[0], 'id', None) \
-                and node.targets[0].id in self.func_data['args']:
-            # operations like arg_1 *= 10
-            # if at the left function arg name
-            return True
+        if getattr(node, 'target', None):
+            if node.target.id in self.func_data['args'] or node.target.id in self.func_data[
+                    'steps_dependencies']:
+                return True, False
+        elif getattr(node, 'targets', None):
+            if getattr(node.targets[0], 'id', None):
+                if node.targets[0].id in self.func_data['args']:
+                    # operations like arg_1 *= 10
+                    # if at the left function arg name
+                    return True, False
+                elif node.targets[0].id in self.func_data[
+                        'steps_dependencies']:
+                    return True, False
+        if getattr(node, 'value', None):
+            if (getattr(node.value, 'id', None) and node.value.id in self.func_data['args']) or (
+                    getattr(node.value, 'id', None) and node.value.id in self.func_data['steps_dependencies']):
+                return True, True
+            elif isinstance(node.value, _ast.Tuple):
+                for inner_node in node.value.elts:
+                    if getattr(inner_node, 'id', None) and inner_node.id in self.func_data['args'] or \
+                            getattr(inner_node, 'id', None) and inner_node.id in self.func_data['steps_dependencies']:
+                        return True, True
+            elif isinstance(node.value, _ast.Call):
+                func = node.value.func
+                if getattr(func.value, 'id', None) and func.value.id \
+                        in self.func_data['args'] or func.value.id in self.func_data['steps_dependencies']:
+                    return True, True
+
+        return False, False
 
     def process_body_node(self, node: Any, variables_names, variables):
+
+        step, arg_in_value = self.check_arg_in_assing_node(node)
+
         if isinstance(node, ast.Return):
-            return_ = {'result': self.get_value(node.value, variables_names, variables)}
+            if getattr(node.value, 'id', None) and node.value.id in self.func_data['steps_dependencies']:
+                return_ = {'result': {'var': node.value.id}}
+            else:
+                return_ = {'result': self.get_value(node.value, variables_names, variables)}
             self.func_data['return'].append(return_)
         elif isinstance(node, _ast.If):
             self.func_data = self.process_if_construction(
                 node, self.func_data, variables_names, variables)
-        elif self.check_arg_in_assing_node(node):
+        elif step:
             # operations like arg_1 *= 10
-            self.add_step_for_arg(node, variables_names, variables)
+            self.add_step_for_arg(node, variables_names, variables, arg_in_value)
         elif getattr(node, 'targets', None) and isinstance(node.targets[0], _ast.Tuple):
             for inner_node in self.separate_assing_nodes(node):
-                if self.check_arg_in_assing_node(node):
+                step, arg_in_value = self.check_arg_in_assing_node(inner_node)
+                if step:
                     # if at the left function arg name
-                    self.add_step_for_arg(inner_node, variables_names, variables)
+                    self.add_step_for_arg(inner_node, variables_names, variables, arg_in_value)
         elif isinstance(node, _ast.Pass):
             return
         else:
@@ -182,7 +210,8 @@ class Analyzer(ast.NodeVisitor):
                           'async_f': async_f,
                           'keys': defaultdict(dict),
                           'variables': [],
-                          'steps': {}}
+                          'steps': {},
+                          'steps_dependencies': {}}
         return self.func_data
 
     def visit_FunctionDef(self, node: ast.FunctionDef, async_f: bool = False, class_: Dict = None):
@@ -223,19 +252,41 @@ class Analyzer(ast.NodeVisitor):
     def visit_Raise(self, node: ast.Name) -> None:
         self.tree['raises'].append(node.exc.__dict__)
 
-    def add_step_for_arg(self, node, variables_names, variables):
-        print('step')
-        print(node.__dict__)
+    def add_step_for_arg(self, node, variables_names: Dict, variables: List, in_value: bool = False):
+        arg_name = None
         if getattr(node, 'target', None):
-            arg = node.target.id
+            var_name = node.target.id
         elif getattr(node, 'targets', None):
-            arg = node.targets[0].id
-        if arg not in self.func_data['steps']:
-            self.func_data['steps'][arg] = []
+            var_name = node.targets[0].id
+        if in_value:
+            if getattr(node.value, 'id', None):
+                if node.value.id in self.func_data['args']:
+                    arg_name = node.value.id
+            elif isinstance(node.value, _ast.Tuple):
+                for inner_node in node.value.elts:
+                    if inner_node.id in self.func_data['args']:
+                        arg_name = inner_node.id
+            elif isinstance(node.value, _ast.Call):
+                func = node.value.func
+                if getattr(func.value, 'id', None):
+                    if func.value.id in self.func_data['args']:
+                        arg_name = func.value.id
+        if not arg_name:
+            if var_name in self.func_data['steps_dependencies']:
+                arg_name = self.func_data['steps_dependencies'][var_name]
+        if var_name not in self.func_data['args']:
+            # TODO: need to add work around when as var used different function arg
+            self.func_data['steps_dependencies'][var_name] = arg_name
+        else:
+            arg_name = var_name
+        if not arg_name:
+            raise
+        if arg_name not in self.func_data['steps']:
+            self.func_data['steps'][arg_name] = []
         step = self.get_value(node, variables_names, variables)
         if isinstance(step, dict) and 'func' in step:
-            self.set_type_by_attrib(arg, step['func']['attr'])
-        self.func_data['steps'][arg].append(step)
+            self.set_type_by_attrib(arg_name, step['func']['attr'])
+        self.func_data['steps'][arg_name].append({'var_name': var_name, 'step': step})
 
     def set_slices_to_func_args(self, arg: Text, _slice: Union[Text, int]):
 
@@ -436,10 +487,11 @@ class Analyzer(ast.NodeVisitor):
             # arg_1 *= 10 operations
             arg = self.get_value(node.target, variables_names, variables)
             # TODO: need to modify type set, can be str also
-            if not self.func_data['args'][arg['args']].get('type') or (
+            if not isinstance(arg['args'], dict):
+                if not self.func_data['args'][arg['args']].get('type') or (
                     isinstance(self.func_data['args'][arg['args']]['type'], dict)
-                    and self.func_data['args'][arg['args']]['type'] is None):
-                self.set_type_to_func_args(arg['args'], int)
+                        and self.func_data['args'][arg['args']]['type'] is None):
+                    self.set_type_to_func_args(arg['args'], int)
             if 'args' in arg:
                 return {'arg': arg,
                         'op': f'{meta.operators[node.op.__class__]}',
