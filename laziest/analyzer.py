@@ -172,7 +172,10 @@ class Analyzer(ast.NodeVisitor):
         step, arg_in_value = self.check_arg_in_assing_node(node)
 
         if isinstance(node, ast.Return):
-            return_ = {'result': self.get_value(node.value, variables_names, variables)}
+            if getattr(node.value, 'id', None) and node.value.id in self.func_data['steps_dependencies']:
+                return_ = {'result': {'var': node.value.id}}
+            else:
+                return_ = {'result': self.get_value(node.value, variables_names, variables)}
             self.func_data['return'].append(return_)
         elif isinstance(node, _ast.If):
             self.func_data = self.process_if_construction(
@@ -250,6 +253,7 @@ class Analyzer(ast.NodeVisitor):
         self.tree['raises'].append(node.exc.__dict__)
 
     def add_step_for_arg(self, node, variables_names: Dict, variables: List, in_value: bool = False):
+        arg_name = None
         if getattr(node, 'target', None):
             var_name = node.target.id
         elif getattr(node, 'targets', None):
@@ -267,6 +271,9 @@ class Analyzer(ast.NodeVisitor):
                 if getattr(func.value, 'id', None):
                     if func.value.id in self.func_data['args']:
                         arg_name = func.value.id
+        if not arg_name:
+            if var_name in self.func_data['steps_dependencies']:
+                arg_name = self.func_data['steps_dependencies'][var_name]
         if var_name not in self.func_data['args']:
             # TODO: need to add work around when as var used different function arg
             self.func_data['steps_dependencies'][var_name] = arg_name
@@ -480,10 +487,11 @@ class Analyzer(ast.NodeVisitor):
             # arg_1 *= 10 operations
             arg = self.get_value(node.target, variables_names, variables)
             # TODO: need to modify type set, can be str also
-            if not self.func_data['args'][arg['args']].get('type') or (
+            if not isinstance(arg['args'], dict):
+                if not self.func_data['args'][arg['args']].get('type') or (
                     isinstance(self.func_data['args'][arg['args']]['type'], dict)
-                    and self.func_data['args'][arg['args']]['type'] is None):
-                self.set_type_to_func_args(arg['args'], int)
+                        and self.func_data['args'][arg['args']]['type'] is None):
+                    self.set_type_to_func_args(arg['args'], int)
             if 'args' in arg:
                 return {'arg': arg,
                         'op': f'{meta.operators[node.op.__class__]}',

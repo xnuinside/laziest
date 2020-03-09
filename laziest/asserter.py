@@ -3,7 +3,7 @@ from typing import Tuple, Union, Any, Dict, List, Text
 from collections.abc import Iterable
 from laziest.params import generate_params_based_on_strategy
 from laziest import analyzer
-from laziest.ast_meta import operators
+import laziest.ast_meta as meta
 from laziest.utils import is_int
 
 normal_types = [int, str, list, dict, tuple, set, bytearray, bytes]
@@ -42,6 +42,10 @@ class Asserter:
                                                                 self.base_params)
         return pack_param_strategy
 
+    def process_var_return(self, var_name, params):
+        result = self.eval_steps_in_order(var_name, params, var=True)
+        return result
+
     def resolve_strategy(self, return_pack: Dict, strategy: Dict) -> Tuple:
         """
             method to resolve one strategy, return result per strategy
@@ -59,15 +63,16 @@ class Asserter:
         _return_value = rp_result
 
         pack_param_strategy = self.get_generated_params_per_strategy(strategy, args)
-
         if isinstance(rp_result, tuple):
             # if we have tuple as result
             pack_result = None
             result_value = []
             for elem in rp_result:
-
-                if list(elem.keys()) == ['args']:
-                    if isinstance(elem, dict) and 'args' in elem and elem['args'] and \
+                if type(elem) in meta.simple_types:
+                    result_value.append(elem)
+                    continue
+                if isinstance(elem, dict) and list(elem.keys()) == ['args']:
+                    if 'args' in elem and elem['args'] and \
                             elem['args'] in self.func_data['steps']:
 
                         result_value.append(self.eval_steps_in_order(elem['args'], pack_param_strategy))
@@ -107,7 +112,7 @@ class Asserter:
             if isinstance(_return_value, dict) and 'error' in _return_value:
                 err_message = _return_value['comment']
                 _return_value = _return_value['error']
-        elif isinstance(return_pack['result'], dict):
+        elif isinstance(rp_result, dict):
             if 'error' in rp_result:
                 # if we have exception
                 _return_value = rp_result['error']
@@ -117,6 +122,8 @@ class Asserter:
                     rp_result, pack_param_strategy)
                 if random:
                     random_values.append(random)
+            elif 'var' in rp_result:
+                _return_value = self.process_var_return(rp_result['var'], pack_param_strategy)
             elif return_pack.get('args') or rp_result.get('args'):
                 _args = rp_result.get('args') or return_pack['result'].get('binop_args')
                 if _args:
@@ -167,12 +174,14 @@ class Asserter:
 
         return pack_param_strategy, _return_value, err_message, log, random_values
 
-    def eval_steps_in_order(self, arg_name: Text, params: Dict) -> Any:
-        steps = self.func_data['steps'][arg_name]
-        arg = params[arg_name]
-        if isinstance(arg,  str):
-            arg = f'\'{arg}\''
+    def eval_steps_in_order(self, name: Text, params: Dict, var: bool = False) -> Any:
+        if var:
+            name = self.func_data['steps_dependencies'][name]
+        steps = self.func_data['steps'][name]
+        arg = params[name]
         for step in steps:
+            if isinstance(arg, str):
+                arg = f'\'{arg}\''
             step = step['step']
             if 'BinOp' not in step:
                 if 'op' in step:
@@ -181,13 +190,13 @@ class Asserter:
                     eval_line, _import = self.prepare_attrib_function_call_to_eval(step)
                     if _import:
                         globals()[_import] = __import__(_import, _import)
-                    eval_line = eval_line.replace(arg_name, arg)
+                    eval_line = eval_line.replace(name, arg)
                 else:
                     raise Exception(f"New step: {step}")
                 arg = eval(eval_line)
             else:
                 _params = deepcopy(params)
-                _params[arg_name] = arg
+                _params[name] = arg
                 arg = self.eval_bin_op_with_params(step, _params, _params)
         return arg
 
@@ -337,7 +346,7 @@ class Asserter:
                 right = bin_op['right'] if not isinstance(bin_op['right'], str) else f'\'{bin_op["right"]}\''
             else:
                 right = params[bin_op['right']]
-            bin_op = f"{left}{operators[bin_op['op'].__class__]}{right}"
+            bin_op = f"{left}{meta.operators[bin_op['op'].__class__]}{right}"
         try:
             # deepcopy need to avoid insert global params in eval_params dict
             return_value = eval(str(bin_op), deepcopy(eval_params))
