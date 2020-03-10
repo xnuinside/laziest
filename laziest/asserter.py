@@ -11,12 +11,13 @@ normal_types = [int, str, list, dict, tuple, set, bytearray, bytes]
 
 class Asserter:
 
-    __slots__ = ['func_data', 'base_params']
+    __slots__ = ['func_data', 'base_params', 'code']
 
-    def __init__(self, func_data: Dict):
+    def __init__(self, func_data: Dict, code: Text):
 
         self.func_data = func_data
         self.base_params = generate_params_based_on_strategy({}, self.func_data)
+        self.code = code
 
     def return_assert_values(self) -> Tuple:
         # null_param - None values dict for each function argument, if exist
@@ -108,7 +109,15 @@ class Asserter:
                 _return_value = tuple(result_value)
         elif isinstance(rp_result, dict) and 'BinOp' in rp_result:
             # 'args': bin_op_args or params, 'result': return_value
-            _return_value = self.eval_bin_op_with_params(rp_result, pack_param_strategy, pack_param_strategy)
+            if self.code and (
+                    (isinstance(rp_result['right'], dict) and rp_result['right'].get('func')) or (
+                    isinstance(rp_result['left'], dict) and rp_result['left'].get('func'))):
+                # TODO: exec several times to check random values
+                params = deepcopy(pack_param_strategy)
+                exec(self.code, params)
+                _return_value = params['exec_result']
+            else:
+                _return_value = self.eval_bin_op_with_params(rp_result, pack_param_strategy, pack_param_strategy)
             if isinstance(_return_value, dict) and 'error' in _return_value:
                 err_message = _return_value['comment']
                 _return_value = _return_value['error']

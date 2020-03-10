@@ -10,6 +10,8 @@ from laziest.codegen import generate_test_file_content
 from laziest.conf.config import init_config, default_settings
 from laziest.walker import PathWalker, FilteredPaths
 
+from codegraph.core import CodeGraph
+
 
 tabnanny.verbose = True
 
@@ -83,14 +85,17 @@ def tests_generator_per_file(python_file, debug):
     an.visit(tree)
     an.report()
 
+    cg = CodeGraph(paths=[python_file])
+    # data with entities end line no and start line no
+    code_lines = cg.get_lines_numbers()[python_file]
+
     # to get diff with existed tests
     signatures_list = {'classes': [], 'def': []}
     for class_ in an.tree['classes']:
         signatures_list['classes'].append(test_method_prefix + class_['name'])
 
     # run test file generator
-    print(debug)
-    tf_content = generate_test_file_content(an, python_file, debug)
+    tf_content = generate_test_file_content(an, python_file, code_lines, debug)
     if append:
         # append new tests to tf
         # if new method in test case for class - insert

@@ -48,10 +48,11 @@ def str_generator(include=None, exclude=None):
     _str = choice(['random_string', 'ghs dsla ds', '@gmail.com'])
     if include:
         index = randint(0, 5)
-        print(include)
         _str = _str[:index] + " ".join(include) + _str[index:]
     elif exclude:
-        _str = _str.replace(exclude, '')
+        if isinstance(exclude, list):
+            for elem in exclude:
+                _str = _str.replace(elem, '')
     return _str
 
 
