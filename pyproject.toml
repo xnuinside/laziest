@@ -10,7 +10,7 @@ authors = ["xnuinside <xnuinside@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-codegraph = "^0.0.4"
+codegraph = "^0.0.7"
 clifier = "^0.0.3"
 black = {version = "^18.3-alpha.0", allows-prereleases = true}
 jedi = "^0.16.0"

@@ -117,7 +117,6 @@ def set_slice_value(_object: Union[Iterable, List, Dict], _slice: Union[int, str
 
 def get_side_of_argument(statement: Dict) -> Text:
     _statement = deepcopy(statement)
-    print(_statement)
     for side in ['left', 'comparators']:
         if isinstance(_statement[side], Iterable):
             if 'arg' in _statement[side]:
@@ -184,8 +183,6 @@ def create_value_in_border_per_arg(arg_type: Any, arg_borders: Dict, _slice=Fals
         right_border = default_value
     exclude = arg_borders['exclude']
     include = arg_borders['include']
-    print(arg_type)
-    print(arg_borders)
     if _slice:
         arg_type = int
     if left_border != -default_value or right_border != default_value:

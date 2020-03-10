@@ -2,7 +2,7 @@
 import os
 import re
 import traceback
-from typing import Dict, Text, Tuple
+from typing import Dict, Text, Tuple, List
 
 import laziest.strings as s
 import laziest.analyzer as a
@@ -15,12 +15,14 @@ reserved_words = ['self', 'cls']
 key_import = '$import$'
 
 
-def generate_tests(tree: Dict, debug: bool):
+def generate_tests(an: Analyzer, code_lines: Dict, debug: bool):
     """ main method return tests body/list for one python module """
     test_case = ""
     imports = []
     # signature list need to check diff with existed tests
     # method types : class, self, static
+    tree = an.tree
+    source_code = an.source
     for class_ in tree['classes']:
         # define test for non-empty classes function
         if not class_['def']:
@@ -30,15 +32,22 @@ def generate_tests(tree: Dict, debug: bool):
         for type_ in method_types:
             for method in class_['def'].get(type_, []):
                 if method != '__init__':
-                    unit_test, func_imports = test_creation(method, class_['def'][type_][method],
+                    # TODO: need fix for class
+                    # method_lines = [code_lines[x] for x in code_lines if x == method][0]
+                    # code = "\n".join(source_code[method_lines.lineno:method_lines.endno])
+                    unit_test, func_imports = test_creation(method, class_['def'][type_][method], code="",
                                                             class_=class_, class_method_type=type_, debug=debug)
+
                     for import_ in func_imports:
                         imports.append(import_)
                     test_case += unit_test
         imports.append(class_['name'])
     for func_name in tree['def']:
         # define test for sync function
-        unit_test, func_imports = test_creation(func_name, tree['def'][func_name], debug=debug)
+        method_lines = [code_lines[x] for x in code_lines if x == func_name][0]
+        code = "\n".join(source_code[method_lines[0]-1:method_lines[1]])
+        code += "\nexec_result = " + source_code[method_lines[0]-1].replace('def', '').replace(':', '')
+        unit_test, func_imports = test_creation(func_name, tree['def'][func_name], code, debug=debug)
         for import_ in func_imports:
             imports.append(import_)
         test_case += unit_test
@@ -54,9 +63,9 @@ def add_imports(path):
     return imports_header
 
 
-def generate_test_file_content(an: Analyzer, path: Text, debug: bool) -> Text:
+def generate_test_file_content(an: Analyzer, path: Text, code_lines: List, debug: bool) -> Text:
     async_in = True if an.tree.get('async') else False
-    result = generate_tests(an.tree, debug)
+    result = generate_tests(an, code_lines, debug)
     if result:
         # need to add import of module that we test
         file_output = combine_file(result, path, async_in)
@@ -124,7 +133,7 @@ def class_methods_names_create(func_name, class_, class_method_type):
 
 
 def test_body_resolver(test_func_definition: Text, func_name: Text, func_data: Dict,
-                       class_=None, class_method_type=None):
+                       code: Text, class_=None, class_method_type=None):
     """
         func_data format:
              {.. 'def': {'function': {'args': OrderedDict(),
@@ -165,7 +174,7 @@ def test_body_resolver(test_func_definition: Text, func_name: Text, func_data: D
     imports = []
     log = False
     # init asserter
-    asserter = Asserter(func_data)
+    asserter = Asserter(func_data, code)
     # get returns result per args group
     returns_ = asserter.return_assert_values()
 
@@ -228,7 +237,7 @@ def test_body_resolver(test_func_definition: Text, func_name: Text, func_data: D
     return test_func_definition, log, imports
 
 
-def test_creation(func_name: Text, func_data: Dict, debug: bool,
+def test_creation(func_name: Text, func_data: Dict, code: Text, debug: bool,
                   class_=None, class_method_type=None) -> Tuple[Text, Text]:
     """ method to generate test body """
     imports = []
@@ -240,7 +249,7 @@ def test_creation(func_name: Text, func_data: Dict, debug: bool,
     if isinstance(func_data, dict) and 'error' not in func_data:
         try:
             func_definition, log, imports = test_body_resolver(
-                func_definition, func_name, func_data, class_, class_method_type)
+                func_definition, func_name, func_data, code, class_, class_method_type)
             func_definition += "\n\n\n"
             if log:
                 method_signature_with_capture = metod_signature.replace('()', '(capsys)')
