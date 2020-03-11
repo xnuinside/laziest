@@ -39,3 +39,9 @@ def one_condition_custom_exception_and_return_binary_op_and_key(arg1, arg2, arg3
     var = 1
     alias = var
     return arg1 * arg2[3] + arg3['number'], var * arg1 * alias - 2
+
+
+def body_in_conditions(chunk):
+    if '=' in chunk:
+        key, _ = chunk.split('=', 1)
+        return key

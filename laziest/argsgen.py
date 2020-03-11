@@ -47,7 +47,7 @@ def map_types(_type, slices=None):
 def str_generator(include=None, exclude=None):
     _str = choice(['random_string', 'ghs dsla ds', '@gmail.com'])
     if include:
-        index = randint(0, 5)
+        index = randint(1, 5)
         _str = _str[:index] + " ".join(include) + _str[index:]
     elif exclude:
         if isinstance(exclude, list):

@@ -79,7 +79,16 @@ class Analyzer(ast.NodeVisitor):
             args = {_value: value['comparators']}
         elif value['ops'] == '>':
             args = {_value: value['comparators'] + randint(1, 100)}
-        result = self.get_value(statement.body[0])
+        # TODO: change this to support body in if's
+        if_variables, if_variables_names = self.extract_variables_in_scope(statement)
+        if len(statement.body) > 1:
+            for body_node in statement.body[:-1]:
+                variables_names = deepcopy(variables_names)
+                variables = deepcopy(variables)
+                variables_names.update(if_variables_names)
+                variables += if_variables
+                self.process_body_node(body_node, variables_names, variables, in_if=True)
+        result = self.get_value(statement.body[-1], variables_names, variables)
         if 'print' in result:
             result = result['print']['text'].strip()
         return_pack = {'args': args, 'result': result}
@@ -96,11 +105,17 @@ class Analyzer(ast.NodeVisitor):
         func_data['ifs'] = previous_statements
         return func_data
 
-    @staticmethod
-    def separate_assing_nodes(node: _ast.Assign):
+    def separate_assing_nodes(self, node: _ast.Assign):
         tuple_key = meta.values_for_ast_type[type(node.targets[0])]
         for num, inner_node in enumerate(getattr(node.targets[0], tuple_key)):
-            inner_value = getattr(node.value, tuple_key)[num]
+            if isinstance(node.value, _ast.Tuple):
+                inner_value = getattr(node.value, tuple_key)[num]
+            else:
+                node_value = self.get_value(node.value)
+                if isinstance(node_value, dict):
+                    inner_value = _ast.Subscript(value=node.value, slice=_ast.Index(value=_ast.Num(n=num)))
+                else:
+                    inner_value = node_value
             var = _ast.Assign(targets=[inner_node], value=inner_value)
             yield var
 
@@ -115,12 +130,13 @@ class Analyzer(ast.NodeVisitor):
         # variables 'id' -> Name node, 'value' -> Node
         variables = []
         for node in node.body:
-            if isinstance(node, ast.Assign):
+            if isinstance(node, _ast.Assign):
                 if getattr(node.targets[0], 'id', None) and node.targets[0].id not in self.func_data['args']:
                     # for single assignments var2 = 1
                     variables.append(node)
                 elif isinstance(node.targets[0], _ast.Tuple):
                     # in one Assign node can be several targets and values, like var1, var2 = 1, 2 (multi assign)
+
                     for var in self.separate_assing_nodes(node):
                         if var.targets[0].id not in self.func_data['args']:
                             variables.append(var)
@@ -161,13 +177,13 @@ class Analyzer(ast.NodeVisitor):
                         return True, True
             elif isinstance(node.value, _ast.Call):
                 func = node.value.func
-                if getattr(func.value, 'id', None) and func.value.id \
-                        in self.func_data['args'] or func.value.id in self.func_data['steps_dependencies']:
-                    return True, True
-
+                if not isinstance(func, _ast.Name):
+                    if getattr(func.value, 'id', None) and func.value.id \
+                            in self.func_data['args'] or func.value.id in self.func_data['steps_dependencies']:
+                        return True, True
         return False, False
 
-    def process_body_node(self, node: Any, variables_names, variables):
+    def process_body_node(self, node: Any, variables_names, variables, in_if: bool = False):
 
         step, arg_in_value = self.check_arg_in_assing_node(node)
 
@@ -180,20 +196,23 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.If):
             self.func_data = self.process_if_construction(
                 node, self.func_data, variables_names, variables)
-        elif step:
-            # operations like arg_1 *= 10
-            self.add_step_for_arg(node, variables_names, variables, arg_in_value)
         elif getattr(node, 'targets', None) and isinstance(node.targets[0], _ast.Tuple):
             for inner_node in self.separate_assing_nodes(node):
                 step, arg_in_value = self.check_arg_in_assing_node(inner_node)
                 if step:
                     # if at the left function arg name
                     self.add_step_for_arg(inner_node, variables_names, variables, arg_in_value)
+        elif step:
+            # operations like arg_1 *= 10
+            self.add_step_for_arg(node, variables_names, variables, arg_in_value)
         elif isinstance(node, _ast.Pass):
             return
         else:
             print(node)
             print(node.__dict__)
+            print(node.value.__dict__)
+            if in_if:
+                return
             raise
 
     def function_data_base(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], async_f: bool) -> Dict:
@@ -380,6 +399,8 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.Name):
             return self.process_ast_name(node, variables_names, variables)
         elif isinstance(node, _ast.Assign):
+            if isinstance(node.targets[0], _ast.Tuple):
+                return self.separate_assing_nodes(node)
             return self.get_value(node.value, variables_names, variables)
         elif isinstance(node, _ast.Dict):
             return {self.get_value(key, variables_names, variables): self.get_value(
@@ -438,10 +459,10 @@ class Analyzer(ast.NodeVisitor):
 
         elif isinstance(node, _ast.Subscript):
             arg = self.get_value(node.value,  variables_names, variables)
-            slice = self.get_value(node.slice,  variables_names, variables)
-            if 'args' in arg:
-                self.set_slices_to_func_args(arg['args'], slice)
-            return {'arg': arg, 'slice': slice}
+            _slice = self.get_value(node.slice,  variables_names, variables)
+            if 'args' in arg and 'func' not in arg:
+                self.set_slices_to_func_args(arg['args'], _slice)
+            return {'arg': arg, 'slice': _slice}
         elif isinstance(node, _ast.Index):
             return self.get_value(node.value,  variables_names, variables)
         elif 'func' in node.__dict__:

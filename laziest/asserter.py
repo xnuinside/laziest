@@ -43,9 +43,15 @@ class Asserter:
                                                                 self.base_params)
         return pack_param_strategy
 
-    def process_var_return(self, var_name, params):
+    def process_var_return(self, var_name: Text, params: Dict) -> Dict:
         result = self.eval_steps_in_order(var_name, params, var=True)
         return result
+
+    def safe_exec(self, pack_param_strategy: Dict) -> Dict:
+        # TODO: need to make it safe
+        params = deepcopy(pack_param_strategy)
+        exec(self.code, params)
+        return params
 
     def resolve_strategy(self, return_pack: Dict, strategy: Dict) -> Tuple:
         """
@@ -61,8 +67,10 @@ class Asserter:
         random_values = []
         log = return_pack.get('log', None)
         rp_result = return_pack['result']
+        if isinstance(rp_result, dict) and 'result' in rp_result:
+            # TODO: need to find issue reason and fix
+            rp_result = rp_result['result']
         _return_value = rp_result
-
         pack_param_strategy = self.get_generated_params_per_strategy(strategy, args)
         if isinstance(rp_result, tuple):
             # if we have tuple as result
@@ -113,8 +121,7 @@ class Asserter:
                     (isinstance(rp_result['right'], dict) and rp_result['right'].get('func')) or (
                     isinstance(rp_result['left'], dict) and rp_result['left'].get('func'))):
                 # TODO: exec several times to check random values
-                params = deepcopy(pack_param_strategy)
-                exec(self.code, params)
+                params = self.safe_exec(pack_param_strategy)
                 _return_value = params['exec_result']
             else:
                 _return_value = self.eval_bin_op_with_params(rp_result, pack_param_strategy, pack_param_strategy)
@@ -126,13 +133,16 @@ class Asserter:
                 # if we have exception
                 _return_value = rp_result['error']
                 err_message = rp_result['comment']
-            elif 'func' in return_pack['result']:
+            elif 'func' in rp_result:
                 _return_value, random = self.run_function_several_times(
                     rp_result, pack_param_strategy)
                 if random:
                     random_values.append(random)
             elif 'var' in rp_result:
                 _return_value = self.process_var_return(rp_result['var'], pack_param_strategy)
+            elif rp_result.get('arg'):
+                params = self.safe_exec(pack_param_strategy)
+                _return_value = params['exec_result']
             elif return_pack.get('args') or rp_result.get('args'):
                 _args = rp_result.get('args') or return_pack['result'].get('binop_args')
                 if _args:
@@ -142,7 +152,8 @@ class Asserter:
                     else:
                         _return_value = pack_param_strategy[_args]
                 else:
-                    _return_value = return_pack['result']
+                    _return_value = rp_result
+
             else:
                 if len(list(return_pack['result'].keys())) == 2 and 'func' in return_pack['result'] \
                         and 'args' in return_pack['result']:
