@@ -12,6 +12,8 @@ def map_types_in_range(_type, left_border: int, right_border: int, _slice: Union
         return float_generator(left_border, right_border)
     elif _type == Text or _type == str:
         return str_generator()
+    elif _type is None:
+        return None
     else:
         return f'need_to_define_generator_for_type_{_type}_in_range'
 
@@ -21,6 +23,10 @@ def map_types_include(_type, include=None, exclude=None, slices=None):
         return str_generator(include, exclude)
     elif _type == float:
         return float_generator(include=include, exclude=exclude)
+    elif _type == int:
+        return int_generator(include=include, exclude=exclude)
+    elif _type is None:
+        return None
     else:
         return f'need_to_define_generator_for_type_{_type}_include'
 
@@ -39,7 +45,7 @@ def map_types(_type, slices=None):
     elif _type == list or _type == List:
         return list_generator(slices)
     elif _type is None:
-        return int_generator()
+        return None
     else:
         return 'need_to_define_generator'
 
@@ -52,13 +58,24 @@ def str_generator(include=None, exclude=None):
     elif exclude:
         if isinstance(exclude, list):
             for elem in exclude:
-                _str = _str.replace(elem, '')
+                if elem:
+                    _str = _str.replace(elem, '')
     return _str
 
 
-def int_generator(left_border=None, right_border=None):
+def int_generator(left_border=None, right_border=None, include=None, exclude=None):
     if left_border and right_border:
-        return [randint(left_border, right_border) for _ in range(0, 3)]
+        values = [randint(left_border, right_border) for _ in range(0, 3)]
+        return values
+    if include:
+        return include[0]
+    if exclude:
+        _int_exclude = []
+
+        for i in exclude:
+            if isinstance(i, str) and i.isdigit():
+                _int_exclude.append(int(i))
+        return next(x for x in (randint(3, 15) for _ in range(3)) if x not in _int_exclude)
     return randint(1, 15)
 
 

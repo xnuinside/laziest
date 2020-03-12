@@ -6,7 +6,6 @@ from typing import Any, Text, Dict, Union, List, Tuple
 from pprint import pprint
 from collections import defaultdict, OrderedDict
 from laziest import ast_meta as meta
-from random import randint
 
 pytest_needed = False
 jedi_param_type_line = 'param {param_name}: '
@@ -68,18 +67,10 @@ class Analyzer(ast.NodeVisitor):
         if previous_statements is None:
             previous_statements = []
         # we get variables from statement
-        value = self.get_value(statement.test, variables_names, variables)
+        values = self.get_value(statement.test, variables_names, variables)
         # we work with args from statements
         args = {}
-        # list because if will be multiple values - it cannot be one rule in dict
-        # TODO: need to add support of multiple statements in one condition
-        previous_statements.append([value])
-        _value = self.get_operand_value(value['left'])
-        if value['ops'] == '==':
-            args = {_value: value['comparators']}
-        elif value['ops'] == '>':
-            args = {_value: value['comparators'] + randint(1, 100)}
-        # TODO: change this to support body in if's
+        _conditions_op = None
         variables_names = deepcopy(variables_names)
         variables = deepcopy(variables)
         if_variables, if_variables_names = self.extract_variables_in_scope(statement, variables, variables_names)
@@ -94,7 +85,26 @@ class Analyzer(ast.NodeVisitor):
         if '\'' in result:
             # TODO: this is a hack, need to normalize it
             return_pack['log'] = True
-        func_data['return'].append(return_pack)
+        if 'comparators' not in values:
+            # or/and between conditions
+            _conditions_op = self.get_value(values['op'])
+            _values = []
+            for value in values['values']:
+                if 'left' not in value:
+                    _type = self.func_data['args'][value['args']]['type']
+                    value = {'left': value, 'comparators': meta.empty_types[_type], 'ops': '!='}
+                _values.append(value)
+            values = _values
+        if not isinstance(values, list):
+            values = [values]
+        if _conditions_op == 'or':
+            for value in values:
+                previous_statements.append([value])
+                func_data['return'].append(return_pack)
+        else:
+            previous_statements.append(values)
+            func_data['return'].append(return_pack)
+
         for orelse in statement.orelse:
             if isinstance(orelse, _ast.If):
                 func_data = self.process_if_construction(
@@ -124,6 +134,12 @@ class Analyzer(ast.NodeVisitor):
                     # for items
                     var = _ast.Assign(targets=[target], value=elem)
                     yield var
+        elif isinstance(node.value, _ast.Call):
+            value = self.get_value(node.value, variables_names, variables)
+            for target in node.targets:
+                # for items in call result
+                var = _ast.Assign(targets=[target], value=value)
+                yield var
 
     def extract_variables_in_scope(self,
                                    node: Union[ast.FunctionDef, _ast.If, _ast.For],
@@ -134,6 +150,9 @@ class Analyzer(ast.NodeVisitor):
         """
             method to extract variables and variables names, that used in scope
         :param node:
+        :param variables:
+        :param variables_names:
+        :param main_run:
         :return:
         """
         # local variables, assign statements in function body
@@ -284,12 +303,16 @@ class Analyzer(ast.NodeVisitor):
                         # mean in function we use upper function argument
                         self.identify_type_by_attr(arg, result['func'], variables, variables_names)
             func_data = self.form_strategies(func_data)
-            if not class_:
-                self.tree['def'][node.name] = deepcopy(func_data)
 
             if not func_data['return']:
                 # if function does not return anything
                 func_data['return'] = [{'args': (), 'result': None}]
+            for arg, value in func_data['args'].items():
+                if value.get('type') is None:
+                    # set default type
+                    func_data['args'][arg]['type'] = int
+            if not class_:
+                self.tree['def'][node.name] = deepcopy(func_data)
         except Exception as e:
             if self.debug:
                 func_data = {'error': e.__class__.__name__, 'comment': e}
@@ -446,6 +469,7 @@ class Analyzer(ast.NodeVisitor):
             bin_op_left = self.get_value(node.left, variables_names, variables)
             bin_op_right = self.get_value(node.right, variables_names, variables)
             args = []
+            sides = [bin_op_left, bin_op_right]
             _simple = [int, float]
             if type(bin_op_left) in _simple and type(bin_op_right) in _simple:
                 # count result of bin op
@@ -488,6 +512,45 @@ class Analyzer(ast.NodeVisitor):
 
                         else:
                             self.set_type_to_func_args(arg, str)
+
+            for side in sides:
+                # TODO: need refactor all this logic with setting type by binop
+                opposite_side = [x for x in sides if x != side]
+                if isinstance(side, dict) and ('args' in side or 'arg' in side) \
+                        and opposite_side and 'func' not in side:
+                    if side.get('args', None):
+                        _side_args = side.get('args', None)
+                    elif side.get('arg'):
+                        # with slice
+                        _side_args = side
+                    opposite_side = opposite_side[0]
+                    if isinstance(_side_args, list):
+                        # TODO: maybe for arg in args?
+                        _side_args = _side_args[0]
+                    if isinstance(_side_args, dict) and 'slice' in _side_args:
+                        if 'args' not in _side_args['arg']:
+                            # mean we have simple dict
+                            continue
+                        _arg_name = _side_args['arg']['args']
+                    elif isinstance(_side_args, dict) and 'func' in _side_args:
+                        # need check by func
+                        continue
+                    else:
+                        _arg_name = _side_args
+                    if 'slice' not in _side_args:
+                        _type_check = bool(self.func_data['args'][_arg_name]['type'])
+                    else:
+                        _type_check = bool(self.func_data['keys'][_side_args['slice']][_arg_name]['type'])
+                    if isinstance(side, dict) and _side_args and not _type_check:
+                        if isinstance(opposite_side, dict):
+                            if 'args' in opposite_side:
+                                self.set_type_to_func_args(_side_args,
+                                                           self.func_data['args'][opposite_side['args']]['type'])
+                            elif 'BinOp' in opposite_side:
+                                if 'args' in opposite_side['left']:
+                                    self.set_type_to_func_args(
+                                        _side_args, self.func_data['args'][opposite_side['left']['args']]['type'])
+                            _type = True
             return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
 
         elif isinstance(node, _ast.Subscript):
@@ -498,6 +561,8 @@ class Analyzer(ast.NodeVisitor):
             return {'arg': arg, 'slice': _slice}
         elif isinstance(node, _ast.Index):
             return self.get_value(node.value,  variables_names, variables)
+        elif isinstance(node, dict):
+            return node
         elif 'func' in node.__dict__:
             if 'id' in node.func.__dict__:
                 if node.func.id == 'print':
@@ -518,7 +583,7 @@ class Analyzer(ast.NodeVisitor):
                     arg = self.get_value(node.args[0], variables_names, variables)
                 else:
                     arg = {}
-                func = self.get_value(node.func)
+                func = self.get_value(node.func, variables_names, variables)
                 result = {'func': func, 'args': arg}
                 return result
         elif isinstance(node, _ast.Compare):
@@ -553,7 +618,7 @@ class Analyzer(ast.NodeVisitor):
             if getattr(node.value, 'id', None) and getattr(node.value, 'id', None) in self.func_data['args']:
                 # TODO: need to add with slice
                 self.set_type_by_attrib(node.value.id, node.attr)
-            value = self.get_value(node.value)
+            value = self.get_value(node.value, variables_names, variables)
             attr = self.get_attr_call_line(node)
             return {'l_value': value, 'attr': attr}
         elif isinstance(node, _ast.Return):
@@ -581,6 +646,9 @@ class Analyzer(ast.NodeVisitor):
             return 'in'
         elif isinstance(node, _ast.NotIn):
             return 'not in'
+        elif isinstance(node, _ast.BoolOp):
+            return {'op': node.op, 'values': [self.get_value(
+                value, variables_names, variables) for value in node.values]}
         else:
             print("new type",
                   node,
@@ -597,13 +665,22 @@ class Analyzer(ast.NodeVisitor):
         not_statement['previous'] = True
         return not_statement
 
+    def reverse_condition_group(self, statement_group: Union[Dict, List]) -> Dict:
+        if isinstance(statement_group, list):
+            not_statement_group = []
+            for statement in statement_group:
+                not_statement_group.append(self.reverse_condition(statement))
+            return not_statement_group
+        else:
+            return self.reverse_condition(statement_group)
+
     def get_reversed_previous_statement(self, previous_statement: List) -> List:
         """ iterate other conditions in strategy and reverse
             them if they are was not not reversed previous """
         not_previous_statement = []
         for statement in previous_statement:
             if 'previous' not in statement:
-                not_previous_statement.append(self.reverse_condition(statement))
+                not_previous_statement.append(self.reverse_condition_group(statement))
             else:
                 not_previous_statement.append(statement)
         return not_previous_statement
@@ -623,6 +700,10 @@ class Analyzer(ast.NodeVisitor):
             # now add last strategy, that exclude all previous strategies
             s.append(self.get_reversed_previous_statement(s[-1]))
         func_data['s'] = s
+
+        if len(func_data['return']) < len(func_data['s']):
+            for _ in range(len(func_data['s']) - len(func_data['return'])):
+                func_data['return'].append({'result': None})
         return func_data
 
     def get_attr_call_line(self, node: _ast.Attribute) -> Text:

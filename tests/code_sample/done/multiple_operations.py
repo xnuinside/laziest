@@ -26,3 +26,4 @@ def multiple_assigments_per_line_attr_calls(arg1, arg2):
 def multiple_assigment_per_line_attr_calls_more_call(key, val, new, line, one_more):
     key, val, new, line, one_more = key.strip(), val.split(), new.strip(), line.split(), one_more.strip()
     return key, val, new, line, one_more
+

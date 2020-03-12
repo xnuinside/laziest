@@ -227,7 +227,8 @@ def test_body_resolver(test_func_definition: Text, func_name: Text, func_data: D
                     asserts_definition_str = function_header + f'[\'{key}\']' + " is not None "
                 asserts_definition.add(asserts_definition_str)
         else:
-            eq_line = " is " if return_value is None else f" == "
+            const_object_list = [None, True, False]
+            eq_line = " is " if return_value in const_object_list else f" == "
 
             return_value = str(return_value) if not isinstance(return_value, str) else f"\'{return_value}\'"
             asserts_definition_str = function_header + f"{eq_line}" + return_value + f"\n{s.SP_4}"

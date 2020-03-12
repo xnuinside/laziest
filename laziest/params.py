@@ -118,7 +118,7 @@ def set_slice_value(_object: Union[Iterable, List, Dict], _slice: Union[int, str
 def get_side_of_argument(statement: Dict) -> Text:
     _statement = deepcopy(statement)
     for side in ['left', 'comparators']:
-        if isinstance(_statement[side], Iterable):
+        if isinstance(_statement.get(side, None), Iterable):
             if 'arg' in _statement[side]:
                 _statement[side] = _statement[side]['arg']
             if 'args' in _statement[side]:
@@ -126,8 +126,7 @@ def get_side_of_argument(statement: Dict) -> Text:
                 return side
 
 
-def extract_border_values(strategies, args):
-
+def get_border_from_statement(args, statement, args_borders):
     sides = {
         '>': 'left',
         '<': 'right',
@@ -142,23 +141,43 @@ def extract_border_values(strategies, args):
         'left': 'comparators',
         'comparators': 'left'
     }
-    args_borders = defaultdict(dict)
-    for statement in strategies:
-        arg_side = get_side_of_argument(statement)
-        _arg_name, _slice = get_value_name(statement[arg_side], separate_slice=True)
-        if statement['ops'] == '==':
+    arg_side = get_side_of_argument(statement)
+    _arg_name, _slice = get_value_name(statement[arg_side], separate_slice=True)
+    if statement.get('ops') == '==':
+        if not _slice:
+            args[_arg_name] = statement[opposite_side[arg_side]]
+        else:
+            args[_arg_name] = set_slice_value(args[_arg_name], _slice, statement[opposite_side[arg_side]])
+
+    else:
+        operator = sides[statement['ops']]
+        border_value_key = statement[opposite_side[arg_side]]
+        if not statement.get('ops'):
+            # mean value must exist, no matter that int != 0, str != '' and etc
             if not _slice:
                 args[_arg_name] = statement[opposite_side[arg_side]]
             else:
-                args[_arg_name] = set_slice_value(args[_arg_name], _slice,  statement[opposite_side[arg_side]])
+                args[_arg_name] = set_slice_value(args[_arg_name], _slice,
+                                                  statement[opposite_side[arg_side]])
 
+        if not _slice:
+
+            args_borders = add_border_to_arg(args_borders, _arg_name, border_value_key,
+                                             operator)
         else:
-            if not _slice:
-                args_borders = add_border_to_arg(args_borders, _arg_name, statement[opposite_side[arg_side]],
-                                                 sides[statement['ops']])
-            else:
-                args_borders = add_border_to_arg(args_borders, _arg_name, statement[opposite_side[arg_side]],
-                                                 sides[statement['ops']], _slice=_slice)
+            args_borders = add_border_to_arg(args_borders, _arg_name, statement[opposite_side[arg_side]],
+                                             operator, _slice=_slice)
+    return args_borders
+
+
+def extract_border_values(strategies, args):
+    args_borders = {}
+    for statement_group in strategies:
+        if isinstance(statement_group, list):
+            for statement in statement_group:
+                args_borders = get_border_from_statement(args, statement, args_borders)
+        else:
+            args_borders = get_border_from_statement(args, statement_group, args_borders)
     return args_borders
 
 
