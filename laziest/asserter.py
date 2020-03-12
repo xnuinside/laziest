@@ -50,7 +50,10 @@ class Asserter:
     def safe_exec(self, pack_param_strategy: Dict) -> Dict:
         # TODO: need to make it safe
         params = deepcopy(pack_param_strategy)
-        exec(self.code, params)
+        try:
+            exec(self.code, params)
+        except Exception as e:
+            params['exec_result'] = {'comment': e, 'error': e.__class__.__name__}
         return params
 
     def resolve_strategy(self, return_pack: Dict, strategy: Dict) -> Tuple:
@@ -98,21 +101,31 @@ class Asserter:
                         result_value.append(pack_result)
                     break
                 else:
-                    if not pack_result and isinstance(elem, dict):
+                    if isinstance(elem, dict):
                         if 'func' in elem:
                             result, random = self.run_function_several_times(elem, pack_param_strategy)
                             if random:
                                 random_values.append(random)
                             else:
                                 result_value.append(result)
+                        elif 'arg' in elem:
+                            params = self.safe_exec(pack_param_strategy)
+                            result_value = params['exec_result']
+                            break
                         elif 'args' in elem:
                             result_value.append(pack_param_strategy[elem['args']])
                         else:
                             result_value.append(elem)
                     else:
                         result_value.append(pack_result)
-            if len(result_value) == 1:
+            if result_value and len(result_value) == 1:
                 _return_value = result_value[0]
+            elif result_value is None:
+
+                _return_value = result_value
+            elif 'error' in result_value:
+
+                _return_value = result_value
             else:
                 _return_value = tuple(result_value)
         elif isinstance(rp_result, dict) and 'BinOp' in rp_result:
@@ -192,6 +205,10 @@ class Asserter:
             if isinstance(return_pack['result'], dict) and 'args' in return_pack['result']:
                 _return_value = args[return_pack['result']['args']]
 
+        if isinstance(_return_value, dict) and 'error' in _return_value:
+            # if we have exception
+            err_message = _return_value['comment']
+            _return_value = _return_value['error']
         return pack_param_strategy, _return_value, err_message, log, random_values
 
     def eval_steps_in_order(self, name: Text, params: Dict, var: bool = False) -> Any:
@@ -224,6 +241,7 @@ class Asserter:
         # TODO: very weird method
         _import = None
         _statement = deepcopy(statement)
+        print(_statement)
         while isinstance(_statement, dict):
             if not isinstance(_statement.get('value', {}), dict):
                 _load = self.func_data[_statement['t']].get(_statement['value'])
@@ -234,22 +252,30 @@ class Asserter:
             for key in ['l_value', 'func']:
                 # logic for attribute functions calls
                 if key in _statement:
-                    _statement = _statement[key]
-                    if 'l_value' in _statement and 'attr' in _statement['l_value']:
-                        _statement['l_value']['attr'] = _statement['l_value']['attr'] + '.' + statement.get('attr', '')
-                        _statement = _statement['l_value']
-                    if 'l_value' in _statement and 'args' in _statement['l_value']:
-                        _statement = _statement['l_value']['args'] + '.' + _statement.get('attr')
-                    elif 'func' in _statement:
-                        _statement['func']['attr'] = _statement['func']['attr'] + '()' + '.' + statement.get('attr', '')
-                        statement = _statement['func']
-                    elif 'l_value' not in _statement:
-                        _statement = f'{_statement["args"]}.{statement["attr"]}'
+                    print(_statement)
+                    if isinstance(_statement[key], dict):
 
-                    elif 't' in _statement['l_value']:
-                        # we found start object
-                        _import = _statement['l_value']['value']
-                        _statement = _statement['l_value']['value'] + '.' + _statement.get('attr')
+                        _statement = _statement[key]
+                        if 'l_value' in _statement and 'attr' in _statement['l_value']:
+                            _statement['l_value']['attr'] = _statement['l_value']['attr'] + '.' + statement.get(
+                                'attr', '')
+                            _statement = _statement['l_value']
+                        if 'l_value' in _statement and 'args' in _statement['l_value']:
+                            _statement = _statement['l_value']['args'] + '.' + _statement.get('attr')
+                        elif 'func' in _statement:
+                            _statement['func']['attr'] = _statement['func']['attr'] + '()' + '.' + statement.get(
+                                'attr', '')
+                            statement = _statement['func']
+                        elif 'l_value' not in _statement:
+                            _statement = f'{_statement["args"]}.{statement["attr"]}'
+
+                        elif isinstance(_statement['l_value'], dict) and 't' in _statement['l_value']:
+                            # we found start object
+                            _import = _statement['l_value']['value']
+                            _statement = _statement['l_value']['value'] + '.' + _statement.get('attr')
+                    else:
+                        print(_statement)
+                        _statement = f"\'{_statement['l_value']}\'.{_statement['attr']}"
         if '()' not in _statement:
             if not statement.get('args'):
                 _statement = _statement + '()'

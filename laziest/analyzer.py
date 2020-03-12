@@ -80,15 +80,14 @@ class Analyzer(ast.NodeVisitor):
         elif value['ops'] == '>':
             args = {_value: value['comparators'] + randint(1, 100)}
         # TODO: change this to support body in if's
-        if_variables, if_variables_names = self.extract_variables_in_scope(statement)
+        variables_names = deepcopy(variables_names)
+        variables = deepcopy(variables)
+        if_variables, if_variables_names = self.extract_variables_in_scope(statement, variables, variables_names)
+
         if len(statement.body) > 1:
             for body_node in statement.body[:-1]:
-                variables_names = deepcopy(variables_names)
-                variables = deepcopy(variables)
-                variables_names.update(if_variables_names)
-                variables += if_variables
                 self.process_body_node(body_node, variables_names, variables, in_if=True)
-        result = self.get_value(statement.body[-1], variables_names, variables)
+        result = self.get_value(statement.body[-1], if_variables_names, if_variables)
         if 'print' in result:
             result = result['print']['text'].strip()
         return_pack = {'args': args, 'result': result}
@@ -105,21 +104,32 @@ class Analyzer(ast.NodeVisitor):
         func_data['ifs'] = previous_statements
         return func_data
 
-    def separate_assing_nodes(self, node: _ast.Assign):
-        tuple_key = meta.values_for_ast_type[type(node.targets[0])]
-        for num, inner_node in enumerate(getattr(node.targets[0], tuple_key)):
-            if isinstance(node.value, _ast.Tuple):
-                inner_value = getattr(node.value, tuple_key)[num]
-            else:
-                node_value = self.get_value(node.value)
-                if isinstance(node_value, dict):
-                    inner_value = _ast.Subscript(value=node.value, slice=_ast.Index(value=_ast.Num(n=num)))
+    def separate_assing_nodes(self, node: _ast.Assign, variables_names, variables):
+        if isinstance(node.targets[0], _ast.Tuple):
+            tuple_key = meta.values_for_ast_type[type(node.targets[0])]
+            for num, target_node in enumerate(getattr(node.targets[0], tuple_key)):
+                if isinstance(node.value, _ast.Tuple):
+                    inner_value = getattr(node.value, tuple_key)[num]
                 else:
-                    inner_value = node_value
-            var = _ast.Assign(targets=[inner_node], value=inner_value)
-            yield var
+                    node_value = self.get_value(node.value, variables_names, variables)
+                    if isinstance(node_value, dict):
+                        inner_value = _ast.Subscript(value=node.value, slice=_ast.Index(value=_ast.Num(n=num)))
+                    else:
+                        inner_value = node_value
+                var = _ast.Assign(targets=[target_node], value=inner_value)
+                yield var
+        elif isinstance(node.value, _ast.List):
+            for target in node.targets:
+                for elem in node.value.elts:
+                    # for items
+                    var = _ast.Assign(targets=[target], value=elem)
+                    yield var
 
-    def extract_variables_in_scope(self, node: ast.FunctionDef):
+    def extract_variables_in_scope(self,
+                                   node: Union[ast.FunctionDef, _ast.If, _ast.For],
+                                   variables: List = None,
+                                   variables_names: Dict = None,
+                                   main_run: bool = False):
 
         """
             method to extract variables and variables names, that used in scope
@@ -128,27 +138,38 @@ class Analyzer(ast.NodeVisitor):
         """
         # local variables, assign statements in function body
         # variables 'id' -> Name node, 'value' -> Node
-        variables = []
+        if not variables:
+            variables = []
+            variables_names = {}
+
         for node in node.body:
+            if getattr(node, 'body', None) and not isinstance(node, _ast.For):
+                _variables, _ = self.extract_variables_in_scope(node)
+                variables += _variables
+
             if isinstance(node, _ast.Assign):
                 if getattr(node.targets[0], 'id', None) and node.targets[0].id not in self.func_data['args']:
                     # for single assignments var2 = 1
                     variables.append(node)
                 elif isinstance(node.targets[0], _ast.Tuple):
                     # in one Assign node can be several targets and values, like var1, var2 = 1, 2 (multi assign)
-
-                    for var in self.separate_assing_nodes(node):
+                    for var in self.separate_assing_nodes(node, variables_names, variables):
                         if var.targets[0].id not in self.func_data['args']:
                             variables.append(var)
+
+            elif isinstance(node, _ast.If):
+                _variables, _ = self.extract_variables_in_scope(node, variables, variables_names)
+                variables += _variables
         variables_names = {}
         if variables:
             # define code variables in dict
             for index, var in enumerate(variables):
                 var_names = {name_node.id: index for name_node in var.targets}
                 variables_names.update(var_names)
-        self.variables = variables
-        self.variables_names = deepcopy(variables_names)
-        self.func_data['variables'] = self.variables
+        if main_run:
+            self.variables = variables
+            self.variables_names = deepcopy(variables_names)
+            self.func_data['variables'] = self.variables
         return variables, variables_names
 
     def check_arg_in_assing_node(self, node: _ast.Assign) -> Tuple[bool, bool]:
@@ -183,7 +204,17 @@ class Analyzer(ast.NodeVisitor):
                         return True, True
         return False, False
 
-    def process_body_node(self, node: Any, variables_names, variables, in_if: bool = False):
+    def process_for_node(self, node, variables_names, variables):
+        for var in self.separate_assing_nodes(_ast.Assign(targets=[node.target], value=node.iter),
+                                              variables_names, variables):
+            variables.append(var)
+            _index = len(variables) - 1
+            variables_names[var.targets[0].id] = _index
+            for inner_node in node.body:
+                self.process_body_node(inner_node, variables_names, variables)
+        return variables
+
+    def process_body_node(self, node: Any, variables_names: Dict, variables: List, in_if: bool = False):
 
         step, arg_in_value = self.check_arg_in_assing_node(node)
 
@@ -197,7 +228,7 @@ class Analyzer(ast.NodeVisitor):
             self.func_data = self.process_if_construction(
                 node, self.func_data, variables_names, variables)
         elif getattr(node, 'targets', None) and isinstance(node.targets[0], _ast.Tuple):
-            for inner_node in self.separate_assing_nodes(node):
+            for inner_node in self.separate_assing_nodes(node, variables_names, variables):
                 step, arg_in_value = self.check_arg_in_assing_node(inner_node)
                 if step:
                     # if at the left function arg name
@@ -207,10 +238,11 @@ class Analyzer(ast.NodeVisitor):
             self.add_step_for_arg(node, variables_names, variables, arg_in_value)
         elif isinstance(node, _ast.Pass):
             return
+        elif isinstance(node, _ast.For):
+            self.process_for_node(node, variables_names, variables)
         else:
             print(node)
             print(node.__dict__)
-            print(node.value.__dict__)
             if in_if:
                 return
             raise
@@ -230,14 +262,15 @@ class Analyzer(ast.NodeVisitor):
                           'keys': defaultdict(dict),
                           'variables': [],
                           'steps': {},
-                          'steps_dependencies': {}}
+                          'steps_dependencies': {},
+                          'for': {}}
         return self.func_data
 
     def visit_FunctionDef(self, node: ast.FunctionDef, async_f: bool = False, class_: Dict = None):
         """ main methods to """
         try:
             func_data = self.function_data_base(node, async_f)
-            variables, variables_names = self.extract_variables_in_scope(node)
+            variables, variables_names = self.extract_variables_in_scope(node, main_run=True)
             non_variables_nodes_bodies = [node for node in node.body if node not in variables]
             for body_item in non_variables_nodes_bodies:
                 self.process_body_node(body_item, variables_names, variables)
@@ -250,7 +283,6 @@ class Analyzer(ast.NodeVisitor):
                     if not isinstance(arg, dict) and arg in self.func_data['args']:
                         # mean in function we use upper function argument
                         self.identify_type_by_attr(arg, result['func'], variables, variables_names)
-
             func_data = self.form_strategies(func_data)
             if not class_:
                 self.tree['def'][node.name] = deepcopy(func_data)
@@ -355,6 +387,7 @@ class Analyzer(ast.NodeVisitor):
         else:
             print(node.__dict__)
             print(node.id)
+            print(node)
             raise Exception(node.id)
 
     @staticmethod
@@ -400,7 +433,7 @@ class Analyzer(ast.NodeVisitor):
             return self.process_ast_name(node, variables_names, variables)
         elif isinstance(node, _ast.Assign):
             if isinstance(node.targets[0], _ast.Tuple):
-                return self.separate_assing_nodes(node)
+                return self.separate_assing_nodes(node, variables_names, variables)
             return self.get_value(node.value, variables_names, variables)
         elif isinstance(node, _ast.Dict):
             return {self.get_value(key, variables_names, variables): self.get_value(
@@ -482,7 +515,7 @@ class Analyzer(ast.NodeVisitor):
                         return eval("{}({})".format(node.func.id, ", ".join(args)))
             else:
                 if node.args:
-                    arg = self.get_value(node.args[0])
+                    arg = self.get_value(node.args[0], variables_names, variables)
                 else:
                     arg = {}
                 func = self.get_value(node.func)
@@ -524,7 +557,7 @@ class Analyzer(ast.NodeVisitor):
             attr = self.get_attr_call_line(node)
             return {'l_value': value, 'attr': attr}
         elif isinstance(node, _ast.Return):
-            return {'result': self.get_value(node.value)}
+            return {'result': self.get_value(node.value, variables_names, variables)}
         elif isinstance(node, _ast.AugAssign):
             # arg_1 *= 10 operations
             arg = self.get_value(node.target, variables_names, variables)

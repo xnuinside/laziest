@@ -174,7 +174,7 @@ def create_value_in_border_per_arg(arg_type: Any, arg_borders: Dict, _slice=Fals
     default_value = 1000
     # TODO: fix work with multiple ranges, now just 0 index
     if arg_borders['left']:
-        left_border = arg_borders['left'][0]
+        left_border = arg_borders['left'][0] + 1
     else:
         left_border = -default_value
     if arg_borders['right']:
