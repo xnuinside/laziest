@@ -26,11 +26,11 @@ class Asserter:
         if not self.func_data['return']:
             # if function with 'pass' or without return statement
             self.func_data['return'] = [{'args': {}, 'result': None}]
-        for num, return_pack in enumerate(self.func_data['return']):
+        for num, strategy in enumerate(self.func_data['s']):
             # get for each return statement param strategy and result
             # if err_message - we have error as result
             # take args strategy for this return
-            strategy = self.func_data['s'][num]
+            return_pack = self.func_data['return'][num]
             yield self.resolve_strategy(return_pack, strategy)
 
     def get_generated_params_per_strategy(self, strategy: Dict, args: Dict):
@@ -241,20 +241,16 @@ class Asserter:
         # TODO: very weird method
         _import = None
         _statement = deepcopy(statement)
-        print(_statement)
         while isinstance(_statement, dict):
             if not isinstance(_statement.get('value', {}), dict):
                 _load = self.func_data[_statement['t']].get(_statement['value'])
                 if _statement['t'] == 'import':
                     if _load in globals()['__builtin__']:
                         raise
-
             for key in ['l_value', 'func']:
                 # logic for attribute functions calls
                 if key in _statement:
-                    print(_statement)
                     if isinstance(_statement[key], dict):
-
                         _statement = _statement[key]
                         if 'l_value' in _statement and 'attr' in _statement['l_value']:
                             _statement['l_value']['attr'] = _statement['l_value']['attr'] + '.' + statement.get(
@@ -274,7 +270,6 @@ class Asserter:
                             _import = _statement['l_value']['value']
                             _statement = _statement['l_value']['value'] + '.' + _statement.get('attr')
                     else:
-                        print(_statement)
                         _statement = f"\'{_statement['l_value']}\'.{_statement['attr']}"
         if '()' not in _statement:
             if not statement.get('args'):

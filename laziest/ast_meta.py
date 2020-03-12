@@ -46,7 +46,9 @@ operators = {
     _ast.RShift: '>>',
     _ast.BitOr: '|',
     _ast.BitAnd: '&',
-    _ast.BitXor: '^'
+    _ast.BitXor: '^',
+    _ast.Or: 'or',
+    _ast.And: 'and'
     }
 
 values_for_ast_type = {
@@ -55,4 +57,13 @@ values_for_ast_type = {
     _ast.Tuple: 'elts',
     _ast.Str: 's',
     _ast.Num: 'n'
+}
+
+empty_types = {
+    str: '',
+    None: None,
+    list: [],
+    dict: dict(),
+    set: set([]),
+    tuple: tuple()
 }
