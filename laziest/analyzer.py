@@ -67,14 +67,13 @@ class Analyzer(ast.NodeVisitor):
         if previous_statements is None:
             previous_statements = []
         # we get variables from statement
-        values = self.get_value(statement.test, variables_names, variables)
         # we work with args from statements
         args = {}
         _conditions_op = None
         variables_names = deepcopy(variables_names)
         variables = deepcopy(variables)
         if_variables, if_variables_names = self.extract_variables_in_scope(statement, variables, variables_names)
-
+        values = self.get_value(statement.test, if_variables_names, if_variables)
         if len(statement.body) > 1:
             for body_node in statement.body[:-1]:
                 self.process_body_node(body_node, variables_names, variables, in_if=True)
@@ -311,8 +310,9 @@ class Analyzer(ast.NodeVisitor):
                 if value.get('type') is None:
                     # set default type
                     func_data['args'][arg]['type'] = int
+
             if not class_:
-                self.tree['def'][node.name] = deepcopy(func_data)
+                self.tree['def'][node.name] = func_data
         except Exception as e:
             if self.debug:
                 func_data = {'error': e.__class__.__name__, 'comment': e}
@@ -411,7 +411,8 @@ class Analyzer(ast.NodeVisitor):
             print(node.__dict__)
             print(node.id)
             print(node)
-            raise Exception(node.id)
+            # TODO: this is hack, like almost of the code )) but it's need to be refactored
+            return {'exec': True}
 
     @staticmethod
     def extract_args_in_bin_op(item: Union[Dict, Any], args: List):
@@ -699,11 +700,44 @@ class Analyzer(ast.NodeVisitor):
                 s.append(condition)
             # now add last strategy, that exclude all previous strategies
             s.append(self.get_reversed_previous_statement(s[-1]))
-        func_data['s'] = s
 
+        new_rules = []
+        funcs_checked = []
+        for strategy_block in s:
+            if not isinstance(strategy_block, StrategyAny):
+                # TODO: need to refactor and move out
+                for strategy in strategy_block:
+                    for side in ['comparators', 'left']:
+                        if isinstance(strategy[side], dict) and 'func' in strategy[
+                                side] and strategy[side]['func'] not in funcs_checked:
+                            if 'args' in strategy[side] and isinstance(strategy[side]['args'], str):
+                                arg = strategy[side]['func']['l_value'].get('args', None)
+                                funcs_checked.append(strategy[side]['func'])
+                                if arg:
+                                    rule = {'comparators': strategy[side]['args'],
+                                            'left': {'args': arg},
+                                            'ops': 'in'}
+                                    opposite_rule = {'comparators': strategy[side]['args'],
+                                                     'left': {'args': arg},
+                                                     'ops': 'not in'}
+                                    new_rules.append(rule)
+                                    new_rules.append(opposite_rule)
+        _new_s = []
+        for rule in new_rules:
+            for strategy_block in s:
+                new_block = [x for x in strategy_block]
+                new_block.append(rule)
+                _new_s.append(new_block)
+        if _new_s:
+            s = _new_s
+        func_data['s'] = s
         if len(func_data['return']) < len(func_data['s']):
+            if _new_s:
+                result = deepcopy(func_data['return'][-1])
+            else:
+                result = None
             for _ in range(len(func_data['s']) - len(func_data['return'])):
-                func_data['return'].append({'result': None})
+                func_data['return'].append({'result': result})
         return func_data
 
     def get_attr_call_line(self, node: _ast.Attribute) -> Text:

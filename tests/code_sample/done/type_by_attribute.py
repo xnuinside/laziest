@@ -11,3 +11,12 @@ def index_line(array, elem):
 def split_by_symbol(line, symbol):
     _index = line.split(symbol)
     return _index
+
+
+def parse_cookie(cookie):
+    for chunk in cookie.split(';'):
+        if '=' in chunk:
+            key, val = chunk.split('=', 1)
+        else:
+            key, val = '', chunk
+    return key, val

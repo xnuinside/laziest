@@ -1,5 +1,6 @@
 from copy import deepcopy
 from typing import Tuple, Union, Any, Dict, List, Text
+import types
 from collections.abc import Iterable
 from laziest.params import generate_params_based_on_strategy
 from laziest import analyzer
@@ -108,7 +109,7 @@ class Asserter:
                                 random_values.append(random)
                             else:
                                 result_value.append(result)
-                        elif 'arg' in elem:
+                        elif 'arg' in elem or 'exec' in elem:
                             params = self.safe_exec(pack_param_strategy)
                             result_value = params['exec_result']
                             break
@@ -153,7 +154,7 @@ class Asserter:
                     random_values.append(random)
             elif 'var' in rp_result:
                 _return_value = self.process_var_return(rp_result['var'], pack_param_strategy)
-            elif rp_result.get('arg'):
+            elif rp_result.get('arg', None) or rp_result.get('exec', None):
                 params = self.safe_exec(pack_param_strategy)
                 _return_value = params['exec_result']
             elif return_pack.get('args') or rp_result.get('args'):
@@ -204,6 +205,13 @@ class Asserter:
         else:
             if isinstance(return_pack['result'], dict) and 'args' in return_pack['result']:
                 _return_value = args[return_pack['result']['args']]
+            elif (isinstance(rp_result, dict) and ('exec' in rp_result or (
+                    isinstance(rp_result, tuple) and rp_result[0].get('exec')))) or isinstance(
+                        rp_result, types.GeneratorType):
+
+                # TODO: this is shit, need to fix issue why generator come here, this is a dirty fix
+                params = self.safe_exec(pack_param_strategy)
+                _return_value = params['exec_result']
 
         if isinstance(_return_value, dict) and 'error' in _return_value:
             # if we have exception
