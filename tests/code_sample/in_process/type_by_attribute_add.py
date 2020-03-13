@@ -1,4 +1,4 @@
-def parse_cookie(cookie):
+def parse_cookie_full(cookie):
     cookiedict = {}
     for chunk in cookie.split(';'):
         if '=' in chunk:

@@ -28,3 +28,15 @@ def vars_intersections_steps(key, val):
     new_var *= 4
     alias_var = key + new_var
     return alias_var
+
+##########
+
+def parse_cookie(cookie):
+    for chunk in cookie.split(';'):
+        if '=' in chunk:
+            key, val = chunk.split('=', 1)
+        else:
+            key, val = '', chunk
+    return key, val
+
+

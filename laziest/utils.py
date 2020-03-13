@@ -9,12 +9,16 @@ def get_value_name(value: Union[Dict, Any], separate_slice: bool = False) -> Any
     :param separate_slice:
     :return:
     """
-    if isinstance(value, dict) and 'arg' in value:
-        if 'args' in value['arg']:
-            args = value['arg']['args']
-        else:
-            args = value['arg']
-    else:
+    args = None
+    if isinstance(value, dict):
+        if 'arg' in value:
+            if 'args' in value['arg']:
+                args = value['arg']['args']
+            else:
+                args = value['arg']
+        elif 'func' in value:
+            args = value['func']['l_value']['args']
+    if not args:
         args = value['args']
     if not separate_slice:
         if 'slice' in value:
