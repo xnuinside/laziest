@@ -57,8 +57,10 @@ def generate_tests(an: Analyzer, code_lines: Dict, debug: bool):
 
 def add_imports(path):
     imports_header = f'import sys\n' \
-                     f'sys.path.append(\'{os.path.dirname(path)}\')\n' \
-                     f'from {os.path.basename(path).replace(".py", "")} import {key_import}\n'
+                     f'sys.path.append(\'{os.path.dirname(path)}\')\n'
+
+    if key_import:
+        imports_header += f'from {os.path.basename(path).replace(".py", "")} import {key_import}\n'
 
     return imports_header
 
@@ -66,6 +68,8 @@ def add_imports(path):
 def generate_test_file_content(an: Analyzer, path: Text, code_lines: List, debug: bool) -> Text:
     async_in = True if an.tree.get('async') else False
     result = generate_tests(an, code_lines, debug)
+    print(result)
+    print('result')
     if result:
         # need to add import of module that we test
         file_output = combine_file(result, path, async_in)
@@ -243,9 +247,9 @@ def test_creation(func_name: Text, func_data: Dict, code: Text, debug: bool,
     """ method to generate test body """
     imports = []
     if class_:
-        func_definition = get_method_signature(func_name, func_data['async_f'], class_['name'])
+        func_definition = get_method_signature(func_name, func_data.get('async_f'), class_['name'])
     else:
-        metod_signature = get_method_signature(func_name, func_data['async_f'])
+        metod_signature = get_method_signature(func_name, func_data.get('async_f'))
         func_definition = metod_signature
     if isinstance(func_data, dict) and 'error' not in func_data:
         try:

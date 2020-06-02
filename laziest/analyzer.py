@@ -7,6 +7,9 @@ from pprint import pprint
 from collections import defaultdict, OrderedDict
 from laziest import ast_meta as meta
 
+import jedi
+from jedi.api.completion import get_signature_param_names
+
 pytest_needed = False
 jedi_param_type_line = 'param {param_name}: '
 
@@ -258,6 +261,9 @@ class Analyzer(ast.NodeVisitor):
             return
         elif isinstance(node, _ast.For):
             self.process_for_node(node, variables_names, variables)
+        elif isinstance(node, _ast.Expr):
+            print(node.value.__dict__)
+            return
         else:
             print(node)
             print(node.__dict__)
@@ -314,6 +320,7 @@ class Analyzer(ast.NodeVisitor):
             if not class_:
                 self.tree['def'][node.name] = func_data
         except Exception as e:
+            print(self.debug)
             if self.debug:
                 func_data = {'error': e.__class__.__name__, 'comment': e}
             else:
@@ -369,6 +376,8 @@ class Analyzer(ast.NodeVisitor):
 
     def set_type_to_func_args(self, arg: Union[Text, Dict], _type: Any):
         optional = 'Optional['
+        print(arg)
+        print(type(arg))
         if isinstance(_type, str) and optional in _type:
             _type = _type.split(optional)[1].split(']')[0]
         if isinstance(arg, dict) and arg.get('arg'):
@@ -398,7 +407,7 @@ class Analyzer(ast.NodeVisitor):
             # check in variables
             variable = variables[variables_names[alias]]
             return self.get_value(variable, variables_names, variables)
-        elif alias in self.func_data['args']:
+        elif alias in self.func_data.get('args', {}):
             # check in function arguments
             return {'args': node.id}
         elif alias in self.tree['import']:
@@ -434,6 +443,118 @@ class Analyzer(ast.NodeVisitor):
                 raise
         return args
 
+    def bin_op_value_extract(self, node, variables_names, variables):
+        bin_op_left = self.get_value(node.left, variables_names, variables)
+        bin_op_right = self.get_value(node.right, variables_names, variables)
+        args = []
+        sides = [bin_op_left, bin_op_right]
+        _simple = [int, float]
+        if type(bin_op_left) in _simple and type(bin_op_right) in _simple:
+            # count result of bin op
+            return eval(f'{bin_op_left}{meta.operators[node.op.__class__]}{bin_op_right}')
+        math_type = True
+        if (isinstance(node.left, _ast.Str) or isinstance(node.right, _ast.Str)) \
+                and isinstance(node.op, _ast.Add):
+            # concatination
+            math_type = False
+        if (isinstance(bin_op_left, dict) and 'BinOp' not in bin_op_left) \
+                and (isinstance(bin_op_right, dict) and 'BinOp' not in bin_op_right) or (
+                not (isinstance(bin_op_left, dict) or not (isinstance(bin_op_right, dict)))):
+            for item in [bin_op_right, bin_op_left]:
+                args = self.extract_args_in_bin_op(item, args)
+            if args:
+                for arg in args:
+                    if math_type:
+                        _type = None
+                        # TODO: need to refactor all this logic about assigne types by operations
+                        if (isinstance(arg, dict) and 'slice' not in arg) or not isinstance(arg, dict):
+                            if isinstance(bin_op_left, dict) and 'slice' in bin_op_left:
+                                _type = self.func_data['keys'][bin_op_left['slice']][
+                                    bin_op_left['arg']['args']]['type']
+                            elif isinstance(bin_op_right, dict) and 'slice' in bin_op_right:
+                                _type = self.func_data['keys'][bin_op_right['slice']][
+                                    bin_op_right['arg']['args']]['type']
+                            if _type:
+                                self.set_type_to_func_args(arg, _type)
+                        if not _type:
+                            if (isinstance(node.op, _ast.Mult) or isinstance(node.op, _ast.Add)) and \
+                                    isinstance(bin_op_left, str) or isinstance(bin_op_right, str):
+                                # if at least one operand is string - we can multiply only with int
+                                self.set_type_to_func_args(arg, int)
+                            else:
+                                # mean both of them - function args
+                                if isinstance(arg, dict):
+                                    self.set_type_to_func_args(arg, float)
+                                elif isinstance(arg, list):
+                                    print(f'Strange things {arg}')
+                                elif not self.func_data.get('args', {}).get(arg, {}).get('type'):
+                                    self.set_type_to_func_args(arg, float)
+                    else:
+                        self.set_type_to_func_args(arg, str)
+        for side in sides:
+            # TODO: need refactor all this logic with setting type by binop
+            opposite_side = [x for x in sides if x != side]
+            if isinstance(side, dict) and ('args' in side or 'arg' in side) \
+                    and opposite_side and 'func' not in side:
+                if side.get('args', None):
+                    _side_args = side.get('args', None)
+                elif side.get('arg'):
+                    # with slice
+                    _side_args = side
+                opposite_side = opposite_side[0]
+                if isinstance(_side_args, list):
+                    # TODO: maybe for arg in args?
+                    _side_args = _side_args[0]
+                if isinstance(_side_args, dict) and 'slice' in _side_args:
+                    if 'args' not in _side_args['arg']:
+                        # mean we have simple dict
+                        continue
+                    _arg_name = _side_args['arg']['args']
+                elif isinstance(_side_args, dict) and 'func' in _side_args:
+                    # need check by func
+                    continue
+                else:
+                    _arg_name = _side_args
+                if 'slice' not in _side_args:
+                    _type_check = bool(self.func_data['args'][_arg_name]['type'])
+                else:
+                    _type_check = bool(self.func_data['keys'][_side_args['slice']][_arg_name]['type'])
+                if isinstance(side, dict) and _side_args and not _type_check:
+                    if isinstance(opposite_side, dict):
+                        if 'args' in opposite_side:
+                            self.set_type_to_func_args(_side_args,
+                                                       self.func_data['args'][opposite_side['args']]['type'])
+                        elif 'BinOp' in opposite_side:
+                            if 'args' in opposite_side['left']:
+                                self.set_type_to_func_args(
+                                    _side_args, self.func_data['args'][opposite_side['left']['args']]['type'])
+                        _type = True
+        return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
+
+    def func_value_extract(self, node, variables_names, variables):
+        if 'id' in node.func.__dict__:
+            if node.func.id == 'print':
+                return ", ".join([self.get_value(x)['text'] for x in node.args])
+            if node.keywords:
+                args = [str("{}={},".format(
+                    x.arg, self.get_value(x.value, variables_names, variables))) for x in node.keywords]
+                return {'func': node.func.id, 'args': "".join(args)}
+            else:
+                args = [self.get_value(x, variables_names, variables)
+                        for x in node.args]
+                if 'args' in args[0]:
+                    return {'func': node.func.id, 'args': args}
+                else:
+                    return eval("{}({})".format(node.func.id, ", ".join(args)))
+        else:
+            if node.args:
+                arg = self.get_value(node.args[0], variables_names, variables)
+            else:
+                arg = {}
+            func = self.get_value(node.func, variables_names, variables)
+            result = {'func': func, 'args': arg}
+            return result
+
     def get_value(self, node: Any, variables_names: Dict = None, variables: List = None) -> Any:
         """
             extract values from different types of node
@@ -466,94 +587,7 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, _ast.Raise):
             return {'error': node.exc.func.id, 'comment': self.get_value(node.exc.args[0])}
         elif isinstance(node, ast.BinOp):
-            # TODO: need to refactor this
-            bin_op_left = self.get_value(node.left, variables_names, variables)
-            bin_op_right = self.get_value(node.right, variables_names, variables)
-            args = []
-            sides = [bin_op_left, bin_op_right]
-            _simple = [int, float]
-            if type(bin_op_left) in _simple and type(bin_op_right) in _simple:
-                # count result of bin op
-                return eval(f'{bin_op_left}{meta.operators[node.op.__class__]}{bin_op_right}')
-            math_type = True
-            if (isinstance(node.left, _ast.Str) or isinstance(node.right, _ast.Str))\
-                    and isinstance(node.op, _ast.Add):
-                # concatination
-                math_type = False
-            if (isinstance(bin_op_left, dict) and 'BinOp' not in bin_op_left) \
-                    and (isinstance(bin_op_right, dict) and 'BinOp' not in bin_op_right) or (
-                    not (isinstance(bin_op_left, dict) or not (isinstance(bin_op_right, dict)))):
-                for item in [bin_op_right, bin_op_left]:
-                    args = self.extract_args_in_bin_op(item, args)
-                if args:
-                    for arg in args:
-                        if math_type:
-                            _type = None
-                            # TODO: need to refactor all this logic about assigne types by operations
-                            if (isinstance(arg, dict) and 'slice' not in arg) or not isinstance(arg, dict):
-                                if isinstance(bin_op_left, dict) and 'slice' in bin_op_left:
-                                    _type = self.func_data['keys'][bin_op_left['slice']][
-                                        bin_op_left['arg']['args']]['type']
-                                elif isinstance(bin_op_right, dict) and 'slice' in bin_op_right:
-                                    _type = self.func_data['keys'][bin_op_right['slice']][
-                                        bin_op_right['arg']['args']]['type']
-                                if _type:
-                                    self.set_type_to_func_args(arg, _type)
-                            if not _type:
-                                if (isinstance(node.op, _ast.Mult) or isinstance(node.op, _ast.Add)) and \
-                                        isinstance(bin_op_left, str) or isinstance(bin_op_right, str):
-                                    # if at least one operand is string - we can multiply only with int
-                                    self.set_type_to_func_args(arg, int)
-                                else:
-                                    # mean both of them - function args
-                                    if isinstance(arg, dict):
-                                        self.set_type_to_func_args(arg, float)
-                                    elif not self.func_data['args'].get(arg, {}).get('type'):
-                                        self.set_type_to_func_args(arg, float)
-
-                        else:
-                            self.set_type_to_func_args(arg, str)
-
-            for side in sides:
-                # TODO: need refactor all this logic with setting type by binop
-                opposite_side = [x for x in sides if x != side]
-                if isinstance(side, dict) and ('args' in side or 'arg' in side) \
-                        and opposite_side and 'func' not in side:
-                    if side.get('args', None):
-                        _side_args = side.get('args', None)
-                    elif side.get('arg'):
-                        # with slice
-                        _side_args = side
-                    opposite_side = opposite_side[0]
-                    if isinstance(_side_args, list):
-                        # TODO: maybe for arg in args?
-                        _side_args = _side_args[0]
-                    if isinstance(_side_args, dict) and 'slice' in _side_args:
-                        if 'args' not in _side_args['arg']:
-                            # mean we have simple dict
-                            continue
-                        _arg_name = _side_args['arg']['args']
-                    elif isinstance(_side_args, dict) and 'func' in _side_args:
-                        # need check by func
-                        continue
-                    else:
-                        _arg_name = _side_args
-                    if 'slice' not in _side_args:
-                        _type_check = bool(self.func_data['args'][_arg_name]['type'])
-                    else:
-                        _type_check = bool(self.func_data['keys'][_side_args['slice']][_arg_name]['type'])
-                    if isinstance(side, dict) and _side_args and not _type_check:
-                        if isinstance(opposite_side, dict):
-                            if 'args' in opposite_side:
-                                self.set_type_to_func_args(_side_args,
-                                                           self.func_data['args'][opposite_side['args']]['type'])
-                            elif 'BinOp' in opposite_side:
-                                if 'args' in opposite_side['left']:
-                                    self.set_type_to_func_args(
-                                        _side_args, self.func_data['args'][opposite_side['left']['args']]['type'])
-                            _type = True
-            return {'BinOp': True, 'left': bin_op_left, 'op': node.op, 'right': bin_op_right}
-
+            return self.bin_op_value_extract(node, variables_names, variables)
         elif isinstance(node, _ast.Subscript):
             arg = self.get_value(node.value,  variables_names, variables)
             _slice = self.get_value(node.slice,  variables_names, variables)
@@ -565,34 +599,15 @@ class Analyzer(ast.NodeVisitor):
         elif isinstance(node, dict):
             return node
         elif 'func' in node.__dict__:
-            if 'id' in node.func.__dict__:
-                if node.func.id == 'print':
-                    return ", ".join([self.get_value(x)['text'] for x in node.args])
-                if node.keywords:
-                    args = [str("{}={},".format(
-                        x.arg, self.get_value(x.value, variables_names, variables))) for x in node.keywords]
-                    return {'func': node.func.id, 'args': "".join(args)}
-                else:
-                    args = [self.get_value(x, variables_names, variables)
-                            for x in node.args]
-                    if 'args' in args[0]:
-                        return {'func': node.func.id, 'args': args}
-                    else:
-                        return eval("{}({})".format(node.func.id, ", ".join(args)))
-            else:
-                if node.args:
-                    arg = self.get_value(node.args[0], variables_names, variables)
-                else:
-                    arg = {}
-                func = self.get_value(node.func, variables_names, variables)
-                result = {'func': func, 'args': arg}
-                return result
+            return self.func_value_extract(node, variables_names, variables)
         elif isinstance(node, _ast.Compare):
             result = {'left': self.get_value(node.left, variables_names, variables),
                       'ops': self.get_value(node.ops[0], variables_names, variables),
                       'comparators': self.get_value(node.comparators[0], variables_names, variables)}
             if 'args' in result['left']:
                 # TODO: need to change this, because one arg can be several diff types for diff result
+                print(result['left']['args'])
+                print(node.__dict__)
                 self.set_type_to_func_args(result['left']['args'],
                                            type(result['comparators']))
             return result
@@ -612,11 +627,12 @@ class Analyzer(ast.NodeVisitor):
             _op_map = {
                 _ast.USub: '-',
                 _ast.UAdd: '+',
-                _ast.Invert: '~'
+                _ast.Invert: '~',
+                _ast.Not: '!'
             }
             return eval(f'{_op_map[node.op.__class__]}{self.get_value(node.operand)}')
         elif isinstance(node, _ast.Attribute):
-            if getattr(node.value, 'id', None) and getattr(node.value, 'id', None) in self.func_data['args']:
+            if getattr(node.value, 'id', None) and getattr(node.value, 'id', None) in self.func_data.get('args', {}):
                 # TODO: need to add with slice
                 self.set_type_by_attrib(node.value.id, node.attr)
             value = self.get_value(node.value, variables_names, variables)
@@ -754,8 +770,6 @@ class Analyzer(ast.NodeVisitor):
                               func: Dict, variables: List, variables_names: Dict) -> None:
         # arg - l_value for attrib in function
         # TODO: add check for args in variables, split method
-        import jedi
-        from jedi.api.completion import get_signature_param_names
         arg = func['l_value']['args']
         arg_type = None
         if arg in self.func_data['args']:
@@ -851,7 +865,7 @@ class Analyzer(ast.NodeVisitor):
                 args[arg]['default'] = defaults[num]
 
             funct_info = self.visit_FunctionDef(body_item, class_=True)
-            if funct_info['args']:
+            if funct_info.get('args'):
                 funct_info['doc'] = self.extract_types_from_docstring(body_item)
             for decorator in body_item.decorator_list:
                 if isinstance(decorator, ast.Name) and decorator.id == 'staticmethod':
@@ -882,6 +896,7 @@ class Analyzer(ast.NodeVisitor):
             for arg in body_item.args.args:
                 print('type', arg.arg, doc.split(arg.arg))
         return doc_types
+
 
     def report(self) -> None:
         pprint(self.tree)

@@ -47,6 +47,8 @@ def run_laziest(args: dict):
     # append = True
     # run differ, to collect existed file names and methods
     # pass
+    print('paths')
+    print(paths)
     generate_bunch_of_test_files(paths, args['debug'])
     exit(0)
 
@@ -57,11 +59,13 @@ def generate_bunch_of_test_files(python_paths, debug):
     jobs = []
 
     for python_file in python_paths:
-        jobs.append(pool.apply_async(tests_generator_per_file, (python_file, debug)))
+        print(python_file)
+        tests_generator_per_file(python_file, debug)
+        #jobs.append(pool.apply_async(tests_generator_per_file, (python_file, debug)))
 
     # wait for all jobs to finish
-    for job in list(jobs):
-        job.get()
+    #for job in list(jobs):
+        #job.get()
     while not q.empty():
         proc = subprocess.Popen(f'black -l {79} {q.get()}', shell=True)
         proc.wait()
@@ -81,10 +85,13 @@ def tests_generator_per_file(python_file, debug):
     with open(python_file, "r") as source:
         source_massive = source.read()
         tree = parse(source_massive)
-    an = Analyzer(source_massive, debug)
-    an.visit(tree)
-    an.report()
-
+    try:
+        an = Analyzer(source_massive, debug)
+        an.visit(tree)
+        an.report()
+    except:
+        print('Analyzer error during ')
+    print(f'Generate file: {python_file}')
     cg = CodeGraph(paths=[python_file])
     # data with entities end line no and start line no
     code_lines = cg.get_lines_numbers()[python_file]
@@ -96,6 +103,8 @@ def tests_generator_per_file(python_file, debug):
 
     # run test file generator
     tf_content = generate_test_file_content(an, python_file, code_lines, debug)
+    if tf_content.endswith('import '):
+        return
     if append:
         # append new tests to tf
         # if new method in test case for class - insert

@@ -7,7 +7,7 @@ def map_types_in_range(_type, left_border: int, right_border: int, _slice: Union
     if _slice:
         return int_generator(left_border, right_border)
     if _type == {'No type': True} or _type == int:
-        return int_generator(left_border, right_border)
+        return int_generator(left_border=left_border, right_border=right_border)
     elif _type == float:
         return float_generator(left_border, right_border)
     elif _type == Text or _type == str:
@@ -64,7 +64,7 @@ def str_generator(include=None, exclude=None):
 
 
 def int_generator(left_border=None, right_border=None, include=None, exclude=None):
-    if left_border and right_border:
+    if left_border is not None and right_border is not None:
         values = [randint(left_border, right_border) for _ in range(0, 3)]
         return values
     if include:
